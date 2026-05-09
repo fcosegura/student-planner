@@ -45,7 +45,7 @@ function getSpainNationalHolidaySet(year) {
   return set;
 }
 
-export default function CalendarView({ y, mo, dIM, fD, tByDate, eByDate, todayStr, prev, next, selDay, setSelDay, onAddTaskForDay, onEditTask, onToggleTaskDone, onAddEventForDay, onEditEvent }) {
+export default function CalendarView({ y, mo, dIM, fD, tByDate, eByDate, tasksUndated, todayStr, prev, next, selDay, setSelDay, onAddTaskForDay, onEditTask, onToggleTaskDone, onAddEventForDay, onEditEvent }) {
   const cells = [...Array(fD).fill(null), ...Array.from({ length: dIM }, (_, i) => i + 1)];
   const selDs = selDay ? toDateStr(y, mo, selDay) : null;
   const today = new Date();
@@ -153,6 +153,30 @@ export default function CalendarView({ y, mo, dIM, fD, tByDate, eByDate, todaySt
           })}
         </div>
       </div>
+
+      {Array.isArray(tasksUndated) && tasksUndated.length > 0 && (
+        <div
+          className="undated-tasks-panel"
+          style={{
+            background: 'var(--color-background-primary)',
+            border: '0.5px solid var(--color-border-tertiary)',
+            borderRadius: 'var(--border-radius-lg)',
+            padding: '16px 20px',
+          }}
+        >
+          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 10, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            Tareas sin fecha en calendario
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 12 }}>
+            Aparecen aquí hasta que les asignes un día; así no “desaparecen” al guardar.
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {tasksUndated.map((task) => (
+              <TaskRow key={task.id} task={task} allTasks={[]} simple onClick={() => onEditTask(task)} onToggleDone={onToggleTaskDone} />
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="day-panel" style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)', padding: '16px 20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>

@@ -1,6 +1,6 @@
 // Service Worker — Task Manager PWA
 // Versión de caché: incrementar para forzar actualización
-const CACHE_NAME = 'taskmanager-v4';
+const CACHE_NAME = 'taskmanager-v8';
 
 // Recursos que se precargan en la instalación
 const PRECACHE_URLS = [
@@ -40,6 +40,22 @@ self.addEventListener('fetch', (event) => {
   // Nunca cachear API: siempre red para evitar respuestas stale en sync/workspaces.
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(fetch(request));
+    return;
+  }
+
+  // Bundles con hash (/assets/*): Network First para que cada build se descargue de inmediato.
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok && response.type === 'basic') {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request))
+    );
     return;
   }
 

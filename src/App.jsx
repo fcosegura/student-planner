@@ -74,7 +74,7 @@ export default function App() {
   };
 
   const syncNow = async ({ immediate = false } = {}) => {
-    if (!ready || !authenticated || hydratedSession !== authenticated || !activeProfileId) return false;
+    if (!ready || hydratedSession !== authenticated) return false;
     const payload = latestPayloadRef.current;
     const serialized = serializePayload(payload);
     if (!serialized || serialized === lastSyncedPayloadRef.current) return false;
@@ -86,17 +86,21 @@ export default function App() {
 
     if (immediate) clearSyncDebounce();
 
+    const syncCloud = Boolean(authenticated && activeProfileId);
+
     syncInFlightRef.current = true;
-    setSyncState('saving');
+    if (syncCloud) setSyncState('saving');
     try {
-      await saveData(payload, authenticated, activeProfileId);
+      await saveData(payload, syncCloud, activeProfileId);
       lastSyncedPayloadRef.current = serialized;
-      setSyncState('saved');
-      if (syncFeedbackTimerRef.current) window.clearTimeout(syncFeedbackTimerRef.current);
-      syncFeedbackTimerRef.current = window.setTimeout(() => setSyncState('idle'), 1600);
+      if (syncCloud) {
+        setSyncState('saved');
+        if (syncFeedbackTimerRef.current) window.clearTimeout(syncFeedbackTimerRef.current);
+        syncFeedbackTimerRef.current = window.setTimeout(() => setSyncState('idle'), 1600);
+      }
       return true;
     } catch {
-      setSyncState('error');
+      if (syncCloud) setSyncState('error');
       return false;
     } finally {
       syncInFlightRef.current = false;
@@ -234,7 +238,7 @@ export default function App() {
 
   useEffect(() => {
     latestPayloadRef.current = { tasks, boardNotes, events };
-    if (!ready || !authenticated || hydratedSession !== authenticated || !activeProfileId) return undefined;
+    if (!ready || hydratedSession !== authenticated) return undefined;
     clearSyncDebounce();
     syncDebounceTimerRef.current = window.setTimeout(() => {
       void syncNow();
@@ -595,6 +599,7 @@ export default function App() {
 
   const tByDate = {};
   tasks.forEach((t) => { if (t.date) { (tByDate[t.date] = tByDate[t.date] || []).push(t); } });
+  const tasksUndated = tasks.filter((t) => !t.date);
 
   const eByDate = {};
   events.forEach((e) => {
@@ -787,6 +792,7 @@ export default function App() {
               fD={fD}
               tByDate={tByDate}
               eByDate={eByDate}
+              tasksUndated={tasksUndated}
               todayStr={todayStr}
               prev={() => setCalDate(new Date(y, mo - 1, 1))}
               next={() => setCalDate(new Date(y, mo + 1, 1))}

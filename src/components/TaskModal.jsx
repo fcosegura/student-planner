@@ -2,7 +2,22 @@ import { useState } from 'react';
 import { STATUS, PRIORITY } from '../constants.js';
 import { fmtDate, parseDateTimeFromDescription, parseDescriptionDateResult, cleanDescriptionSegment } from '../utils.jsx';
 
-/** Values must be HH:mm (or '') or controlled <input type="time"> breaks in some browsers. */
+const HOUR_OPTS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+const MINUTE_OPTS = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+
+const selectLike = {
+  width: '100%',
+  minHeight: 44,
+  boxSizing: 'border-box',
+  borderRadius: 'var(--border-radius-md)',
+  border: '0.5px solid var(--color-border-secondary)',
+  padding: '10px 12px',
+  fontSize: 13,
+  background: 'var(--color-background-primary)',
+  appearance: 'none',
+};
+
+/** Stored tasks use HH:mm or ''; keeps imports/sync safe across browsers. */
 function normalizeTimeForInput(value) {
   if (value == null || value === '') return '';
   const s = String(value).trim();
@@ -11,6 +26,13 @@ function normalizeTimeForInput(value) {
   const hh = Math.min(23, Math.max(0, parseInt(m[1], 10)));
   const mm = Math.min(59, Math.max(0, parseInt(m[2], 10)));
   return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+}
+
+function splitTime(timeStr) {
+  const n = normalizeTimeForInput(timeStr);
+  if (!n) return { hour: '', minute: '' };
+  const [h, m] = n.split(':');
+  return { hour: h, minute: m };
 }
 
 export default function TaskModal({ task, onSave, onDelete, onClose }) {
@@ -60,6 +82,8 @@ export default function TaskModal({ task, onSave, onDelete, onClose }) {
   const preview = parseDateTimeFromDescription(form.name || '');
   const previewLabel = preview ? `Detectado: ${fmtDate(preview.date)}${preview.time ? ` · ${preview.time}` : ''}` : null;
 
+  const { hour: timeHour, minute: timeMinute } = splitTime(form.time);
+
   return (
     <form className="liquid-glass-modal" onSubmit={onSubmit} style={{ width: 'min(420px, 100%)', maxWidth: 'calc(100% - 32px)', borderRadius: 'var(--border-radius-lg)', padding: 24, color: 'var(--color-text-primary)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
@@ -101,26 +125,47 @@ export default function TaskModal({ task, onSave, onDelete, onClose }) {
           <span style={{ fontWeight: 500 }}>Fecha</span>
           <input type="date" value={form.date || ''} onChange={(e) => handleChange('date', e.target.value)} style={{ width: '100%', height: 44, boxSizing: 'border-box', borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-secondary)', padding: '10px 12px', fontSize: 13, background: 'var(--color-background-primary)', appearance: 'none' }} />
         </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: 'var(--color-text-secondary)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: 'var(--color-text-secondary)' }}>
           <span style={{ fontWeight: 500 }}>Hora</span>
-          <input
-            type="time"
-            step={60}
-            value={form.time || ''}
-            onChange={(e) => handleChange('time', e.target.value)}
-            style={{
-              width: '100%',
-              minHeight: 44,
-              boxSizing: 'border-box',
-              borderRadius: 'var(--border-radius-md)',
-              border: '0.5px solid var(--color-border-secondary)',
-              padding: '10px 12px',
-              fontSize: 13,
-              background: 'var(--color-background-primary)',
-              /* Do not use appearance:none — it breaks native time picker on WebKit/Safari */
-            }}
-          />
-        </label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <select
+              aria-label="Hora"
+              value={timeHour}
+              onChange={(e) => {
+                const h = e.target.value;
+                if (!h) {
+                  handleChange('time', '');
+                  return;
+                }
+                const m = timeMinute || '00';
+                handleChange('time', `${h}:${m}`);
+              }}
+              style={{ ...selectLike, flex: 1, minWidth: 0 }}
+            >
+              <option value="">—</option>
+              {HOUR_OPTS.map((h) => <option key={h} value={h}>{h}</option>)}
+            </select>
+            <span style={{ color: 'var(--color-text-secondary)', fontWeight: 600, flex: '0 0 auto' }}>:</span>
+            <select
+              aria-label="Minutos"
+              value={timeMinute || '00'}
+              disabled={!timeHour}
+              onChange={(e) => {
+                const mi = e.target.value;
+                if (!timeHour) return;
+                handleChange('time', `${timeHour}:${mi}`);
+              }}
+              style={{
+                ...selectLike,
+                flex: 1,
+                minWidth: 0,
+                opacity: timeHour ? 1 : 0.55,
+              }}
+            >
+              {MINUTE_OPTS.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+        </div>
       </div>
 
       <label style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18, fontSize: 13, color: 'var(--color-text-secondary)' }}>

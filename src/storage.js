@@ -185,12 +185,11 @@ export function validateBackupPayload(payload) {
 
 export function normalizeDataPayload(parsed) {
   if (Array.isArray(parsed)) {
-    const tasks = parsed.map(normalizeTask);
-    if (tasks.every(isValidTask)) return { tasks, boardNotes: [], events: [] };
+    const tasks = parsed.map(normalizeTask).filter(isValidTask);
+    return { tasks, boardNotes: [], events: [] };
   }
   if (parsed && typeof parsed === 'object' && Array.isArray(parsed.tasks)) {
-    const tasks = parsed.tasks.map(normalizeTask);
-    if (!tasks.every(isValidTask)) return { tasks: [], boardNotes: [], events: [] };
+    const tasks = parsed.tasks.map(normalizeTask).filter(isValidTask);
     const boardNotes = Array.isArray(parsed.boardNotes)
       ? parsed.boardNotes.map(normalizeBoardNote).filter(isValidBoardNote)
       : [];
