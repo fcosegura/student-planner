@@ -467,7 +467,11 @@ async function ensureDefaultProfile(env, userId) {
   const defaultProfileId = `${userId}:work`;
   await env.DB.prepare(
     "INSERT OR IGNORE INTO profiles (id, user_id, name) VALUES (?, ?, ?)"
-  ).bind(defaultProfileId, userId, 'Trabajo').run();
+  ).bind(defaultProfileId, userId, 'Personal').run();
+
+  await env.DB.prepare(
+    "UPDATE profiles SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND id = ? AND (LOWER(TRIM(name)) = ? OR name = ?)"
+  ).bind('Personal', userId, defaultProfileId, 'default', 'Trabajo').run();
 
   // Migrate legacy rows with NULL profile_id into default profile.
   await env.DB.batch([

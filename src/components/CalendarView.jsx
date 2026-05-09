@@ -1,4 +1,5 @@
-import { MONTHS, DAYS } from '../constants.js';
+import { useMemo, useState } from 'react';
+import { MONTHS, DAYS, P_ORDER } from '../constants.js';
 import { toDateStr, fmtDate } from '../utils.jsx';
 import { NBtn } from './shared/index.jsx';
 import TaskRow from './TaskRow.jsx';
@@ -46,6 +47,7 @@ function getSpainNationalHolidaySet(year) {
 }
 
 export default function CalendarView({ y, mo, dIM, fD, tByDate, eByDate, tasksUndated, todayStr, prev, next, selDay, setSelDay, onAddTaskForDay, onEditTask, onToggleTaskDone, onAddEventForDay, onEditEvent }) {
+  const [taskScope, setTaskScope] = useState('day');
   const cells = [...Array(fD).fill(null), ...Array.from({ length: dIM }, (_, i) => i + 1)];
   const selDs = selDay ? toDateStr(y, mo, selDay) : null;
   const today = new Date();
@@ -53,6 +55,57 @@ export default function CalendarView({ y, mo, dIM, fD, tByDate, eByDate, tasksUn
   const fallbackDay = isCurrentMonth ? today.getDate() : 1;
   const eventCreateDate = selDs || toDateStr(y, mo, fallbackDay);
   const holidaySet = getSpainNationalHolidaySet(y);
+
+  const allTasksFlat = useMemo(() => {
+    const dated = Object.values(tByDate || {}).flat();
+    return [...dated, ...(tasksUndated || [])];
+  }, [tByDate, tasksUndated]);
+
+  const pendingTasks = useMemo(() => {
+    const list = allTasksFlat.filter((t) => t.status !== 'done');
+    list.sort((a, b) => {
+      const da = a.date || '';
+      const db = b.date || '';
+      if (da !== db) {
+        if (!da) return 1;
+        if (!db) return -1;
+        return da.localeCompare(db);
+      }
+      const pa = P_ORDER[a.priority] ?? 2;
+      const pb = P_ORDER[b.priority] ?? 2;
+      return pa - pb;
+    });
+    return list;
+  }, [allTasksFlat]);
+
+  const completedTasks = useMemo(() => {
+    const list = allTasksFlat.filter((t) => t.status === 'done');
+    list.sort((a, b) => {
+      const da = a.date || '';
+      const db = b.date || '';
+      if (da !== db) {
+        if (!da) return 1;
+        if (!db) return -1;
+        return db.localeCompare(da);
+      }
+      return (a.name || '').localeCompare(b.name || '');
+    });
+    return list;
+  }, [allTasksFlat]);
+
+  const segmentBtn = (active) => ({
+    flex: '1 1 100px',
+    minHeight: 40,
+    padding: '8px 10px',
+    fontSize: 12,
+    fontWeight: active ? 700 : 600,
+    cursor: 'pointer',
+    borderRadius: 10,
+    border: `1px solid ${active ? 'var(--color-accent)' : 'var(--color-border-secondary)'}`,
+    background: active ? 'var(--color-background-info)' : 'var(--color-background-primary)',
+    color: active ? 'var(--color-accent)' : 'var(--color-text-primary)',
+    whiteSpace: 'nowrap',
+  });
 
   return (
     <div className="calendar-view" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -130,7 +183,11 @@ export default function CalendarView({ y, mo, dIM, fD, tByDate, eByDate, tasksUn
                   display: 'flex', flexDirection: 'column',
                   boxShadow: '0 2px 4px rgba(0,0,0,0.01)',
                 }}
-                onClick={() => day && setSelDay(day)}
+                onClick={() => {
+                  if (!day) return;
+                  setTaskScope('day');
+                  setSelDay(day);
+                }}
                 onDoubleClick={() => day && onAddTaskForDay(dateStr)}
               >
                 <div>
@@ -154,7 +211,49 @@ export default function CalendarView({ y, mo, dIM, fD, tByDate, eByDate, tasksUn
         </div>
       </div>
 
-      {Array.isArray(tasksUndated) && tasksUndated.length > 0 && (
+      <div
+        role="tablist"
+        aria-label="Vista de tareas"
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 8,
+          background: 'var(--color-background-primary)',
+          border: '0.5px solid var(--color-border-tertiary)',
+          borderRadius: 'var(--border-radius-lg)',
+          padding: '12px 14px',
+        }}
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={taskScope === 'day'}
+          style={segmentBtn(taskScope === 'day')}
+          onClick={() => setTaskScope('day')}
+        >
+          Por día
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={taskScope === 'pending'}
+          style={segmentBtn(taskScope === 'pending')}
+          onClick={() => setTaskScope('pending')}
+        >
+          Pendientes ({pendingTasks.length})
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={taskScope === 'completed'}
+          style={segmentBtn(taskScope === 'completed')}
+          onClick={() => setTaskScope('completed')}
+        >
+          Completadas ({completedTasks.length})
+        </button>
+      </div>
+
+      {taskScope === 'day' && Array.isArray(tasksUndated) && tasksUndated.length > 0 && (
         <div
           className="undated-tasks-panel"
           style={{
@@ -172,7 +271,7 @@ export default function CalendarView({ y, mo, dIM, fD, tByDate, eByDate, tasksUn
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {tasksUndated.map((task) => (
-              <TaskRow key={task.id} task={task} allTasks={[]} simple onClick={() => onEditTask(task)} onToggleDone={onToggleTaskDone} />
+              <TaskRow key={task.id} task={task} allTasks={allTasksFlat} simple onClick={() => onEditTask(task)} onToggleDone={onToggleTaskDone} />
             ))}
           </div>
         </div>
@@ -180,39 +279,87 @@ export default function CalendarView({ y, mo, dIM, fD, tByDate, eByDate, tasksUn
 
       <div className="day-panel" style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)', padding: '16px 20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 3 }}>Día seleccionado</div>
-            <div style={{ fontSize: 16, fontWeight: 700 }}>
-              {selDs ? `${DAYS[new Date(selDs).getDay()]}, ${fmtDate(selDs)}` : 'Selecciona un día'}
+          {taskScope === 'day' ? (
+            <>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 3 }}>Día seleccionado</div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>
+                  {selDs ? `${DAYS[new Date(selDs).getDay()]}, ${fmtDate(selDs)}` : 'Selecciona un día'}
+                </div>
+              </div>
+              {selDs && (
+                <button type="button" onClick={() => setSelDay(null)} style={{ border: 'none', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 13 }}>
+                  Cerrar
+                </button>
+              )}
+            </>
+          ) : taskScope === 'pending' ? (
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 3 }}>En todo el espacio</div>
+              <div style={{ fontSize: 16, fontWeight: 700 }}>Todas las pendientes</div>
+              <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 4 }}>
+                {pendingTasks.length === 1 ? '1 tarea sin completar' : `${pendingTasks.length} tareas sin completar`}
+              </div>
             </div>
-          </div>
-          {selDs && (
-            <button type="button" onClick={() => setSelDay(null)} style={{ border: 'none', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 13 }}>
-              Cerrar
-            </button>
+          ) : (
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 3 }}>En todo el espacio</div>
+              <div style={{ fontSize: 16, fontWeight: 700 }}>Tareas completadas</div>
+              <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 4 }}>
+                {completedTasks.length === 1 ? '1 tarea completada' : `${completedTasks.length} tareas completadas`}
+              </div>
+            </div>
           )}
         </div>
 
-        {selDs ? (
-          ((tByDate[selDs] || []).length + (eByDate[selDs] || []).length) > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {(eByDate[selDs] || []).map((event) => (
-                <div key={event.id} onClick={() => onEditEvent(event)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 'var(--border-radius-lg)', background: event.color, color: 'white' }}>
-                  <div style={{ fontSize: 14, fontWeight: 500 }}>{event.title}</div>
-                  <div style={{ fontSize: 12, opacity: 0.8, marginLeft: 'auto' }}>
-                    {fmtDate(event.startDate)}{event.endDate && event.endDate !== event.startDate ? ` - ${fmtDate(event.endDate)}` : ''}
-                  </div>
+        {taskScope === 'day' && (
+          <>
+            {selDs ? (
+              ((tByDate[selDs] || []).length + (eByDate[selDs] || []).length) > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {(eByDate[selDs] || []).map((event) => (
+                    <div key={event.id} onClick={() => onEditEvent(event)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 'var(--border-radius-lg)', background: event.color, color: 'white' }}>
+                      <div style={{ fontSize: 14, fontWeight: 500 }}>{event.title}</div>
+                      <div style={{ fontSize: 12, opacity: 0.8, marginLeft: 'auto' }}>
+                        {fmtDate(event.startDate)}{event.endDate && event.endDate !== event.startDate ? ` - ${fmtDate(event.endDate)}` : ''}
+                      </div>
+                    </div>
+                  ))}
+                  {(tByDate[selDs] || []).map((task) => (
+                    <TaskRow key={task.id} task={task} allTasks={allTasksFlat} simple onClick={() => onEditTask(task)} onToggleDone={onToggleTaskDone} />
+                  ))}
                 </div>
-              ))}
-              {(tByDate[selDs] || []).map((task) => (
-                <TaskRow key={task.id} task={task} allTasks={[]} simple onClick={() => onEditTask(task)} onToggleDone={onToggleTaskDone} />
+              ) : (
+                <div style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>No hay tareas ni eventos para este día.</div>
+              )
+            ) : (
+              <div style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>Haz clic en un día para ver o añadir tareas.</div>
+            )}
+          </>
+        )}
+
+        {taskScope === 'pending' && (
+          pendingTasks.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {pendingTasks.map((task) => (
+                <TaskRow key={task.id} task={task} allTasks={allTasksFlat} simple onClick={() => onEditTask(task)} onToggleDone={onToggleTaskDone} />
               ))}
             </div>
           ) : (
-            <div style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>No hay tareas ni eventos para este día.</div>
+            <div style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>No tienes tareas pendientes.</div>
           )
-        ) : (
-          <div style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>Haz clic en un día para ver o añadir tareas.</div>
+        )}
+
+        {taskScope === 'completed' && (
+          completedTasks.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {completedTasks.map((task) => (
+                <TaskRow key={task.id} task={task} allTasks={allTasksFlat} simple onClick={() => onEditTask(task)} onToggleDone={onToggleTaskDone} />
+              ))}
+            </div>
+          ) : (
+            <div style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>No hay tareas completadas.</div>
+          )
         )}
       </div>
     </div>
