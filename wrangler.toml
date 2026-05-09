@@ -9,6 +9,10 @@ name = "student-planner-lite"
 main = "src/worker.js"
 compatibility_date = "2024-04-03"
 
+# Run before deploy so `[assets].directory` (./dist) exists in CI (Workers Builds / wrangler deploy).
+[build]
+command = "npm run build"
+
 [vars]
 # Must match Google OAuth client ID (Login.jsx) and token audience check in worker.
 GOOGLE_CLIENT_ID = "365692313483-g4tv5i5agl4egs67h980vn6ce977p7df.apps.googleusercontent.com"
