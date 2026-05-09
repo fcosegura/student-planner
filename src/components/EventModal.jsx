@@ -21,24 +21,24 @@ export default function EventModal({ event, onSave, onDelete, onClose }) {
         <button type="button" onClick={onClose} aria-label="Cerrar modal" style={{ border: 'none', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 22, lineHeight: 1 }}>×</button>
       </div>
 
-      <label style={{ display: 'block', marginBottom: 14, fontSize: 13, color: 'var(--color-text-secondary)' }}>
+      <label style={{ display: 'block', marginBottom: 14, fontSize: 13, fontWeight: 600 }}>
         Título del evento
         <input value={form.title} onChange={(e) => handleChange('title', e.target.value)} style={{ width: '100%', boxSizing: 'border-box', marginTop: 6, borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-secondary)', padding: 10, fontSize: 13 }} />
       </label>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: 'var(--color-text-secondary)' }}>
-          <span style={{ fontWeight: 500 }}>Fecha inicio</span>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600 }}>
+          <span>Fecha inicio</span>
           <input type="date" value={form.startDate} onChange={(e) => handleChange('startDate', e.target.value)} style={{ width: '100%', height: 44, boxSizing: 'border-box', borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-secondary)', padding: '10px 12px', fontSize: 13, background: 'var(--color-background-primary)', appearance: 'none' }} />
         </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: 'var(--color-text-secondary)' }}>
-          <span style={{ fontWeight: 500 }}>Fecha fin</span>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600 }}>
+          <span>Fecha fin</span>
           <input type="date" value={form.endDate || ''} min={form.startDate} onChange={(e) => handleChange('endDate', e.target.value)} style={{ width: '100%', height: 44, boxSizing: 'border-box', borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-secondary)', padding: '10px 12px', fontSize: 13, background: 'var(--color-background-primary)', appearance: 'none' }} />
         </label>
       </div>
 
       <div style={{ marginBottom: 18 }}>
-        <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', fontWeight: 500, marginBottom: 6 }}>Color</div>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Color</div>
         <div style={{ display: 'flex', gap: 10 }}>
           {EVENT_COLORS.map((c) => (
             <button key={c} type="button" onClick={() => handleChange('color', c)} style={{ width: 36, height: 36, borderRadius: 999, background: c, border: form.color === c ? '3px solid var(--color-background-primary)' : '3px solid transparent', boxShadow: `0 0 0 1px ${form.color === c ? c : 'var(--color-border-tertiary)'}`, cursor: 'pointer' }} />

@@ -89,44 +89,44 @@ export default function TaskModal({ task, onSave, onDelete, onClose }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: 18, fontWeight: 700 }}>{task.id ? 'Editar tarea' : 'Nueva tarea'}</div>
-          <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 4 }}>
+          <div style={{ fontSize: 13, color: 'var(--color-text-primary)', opacity: 0.82, marginTop: 4 }}>
             Ideal para entregas, exámenes y recordatorios.
           </div>
         </div>
         <button type="button" onClick={onClose} aria-label="Cerrar modal" style={{ border: 'none', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 22, lineHeight: 1 }}>×</button>
       </div>
 
-      <label style={{ display: 'block', marginBottom: 14, fontSize: 13, color: 'var(--color-text-secondary)' }}>
+      <label style={{ display: 'block', marginBottom: 14, fontSize: 13, fontWeight: 600 }}>
         Qué tienes que hacer
         <input value={form.name} onChange={(e) => handleChange('name', e.target.value)} placeholder="Ej: Entregar trabajo de historia" style={{ width: '100%', boxSizing: 'border-box', marginTop: 6, borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-secondary)', padding: 10, fontSize: 13 }} />
       </label>
 
       {previewLabel && (
-        <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, fontSize: 12, color: 'var(--color-text-secondary)', background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.18)', borderRadius: 'var(--border-radius-md)', padding: '10px 12px' }}>
+        <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, fontSize: 12, color: 'var(--color-text-primary)', opacity: 0.9, background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.18)', borderRadius: 'var(--border-radius-md)', padding: '10px 12px' }}>
           <span>{previewLabel}</span>
           <button type="button" onClick={fillDateTime} style={{ border: 'none', background: 'rgba(37,99,235,0.12)', color: 'var(--color-accent)', borderRadius: '999px', padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>Usar fecha</button>
         </div>
       )}
 
-      <label style={{ display: 'block', marginBottom: 14, fontSize: 13, color: 'var(--color-text-secondary)' }}>
+      <label style={{ display: 'block', marginBottom: 14, fontSize: 13, fontWeight: 600 }}>
         Notas (opcional)
         <textarea value={form.notes || ''} onChange={(e) => handleChange('notes', e.target.value)} rows={3} placeholder="Detalles, enlace en texto, etc." style={{ width: '100%', boxSizing: 'border-box', marginTop: 6, borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-secondary)', padding: 10, fontSize: 13, resize: 'vertical' }} />
       </label>
 
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14, fontSize: 13, color: 'var(--color-text-secondary)' }}>
-        <span style={{ fontWeight: 500 }}>Prioridad</span>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14, fontSize: 13, fontWeight: 600 }}>
+        <span>Prioridad</span>
         <select value={form.priority || 'medium'} onChange={(e) => handleChange('priority', e.target.value)} style={{ width: '100%', minHeight: 44, boxSizing: 'border-box', borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-secondary)', padding: '10px 12px', fontSize: 13, background: 'var(--color-background-primary)', appearance: 'none' }}>
           {PRIORITY.map((option) => <option key={option.v} value={option.v}>{option.label}</option>)}
         </select>
       </label>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: 'var(--color-text-secondary)' }}>
-          <span style={{ fontWeight: 500 }}>Fecha</span>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600 }}>
+          <span>Fecha</span>
           <input type="date" value={form.date || ''} onChange={(e) => handleChange('date', e.target.value)} style={{ width: '100%', height: 44, boxSizing: 'border-box', borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-secondary)', padding: '10px 12px', fontSize: 13, background: 'var(--color-background-primary)', appearance: 'none' }} />
         </label>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: 'var(--color-text-secondary)' }}>
-          <span style={{ fontWeight: 500 }}>Hora</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600 }}>
+          <span>Hora</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <select
               aria-label="Hora"
@@ -145,7 +145,7 @@ export default function TaskModal({ task, onSave, onDelete, onClose }) {
               <option value="">—</option>
               {HOUR_OPTS.map((h) => <option key={h} value={h}>{h}</option>)}
             </select>
-            <span style={{ color: 'var(--color-text-secondary)', fontWeight: 600, flex: '0 0 auto' }}>:</span>
+            <span style={{ color: 'var(--color-text-primary)', fontWeight: 600, flex: '0 0 auto' }}>:</span>
             <select
               aria-label="Minutos"
               value={timeMinute || '00'}
@@ -168,8 +168,8 @@ export default function TaskModal({ task, onSave, onDelete, onClose }) {
         </div>
       </div>
 
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18, fontSize: 13, color: 'var(--color-text-secondary)' }}>
-        <span style={{ fontWeight: 500 }}>Estado</span>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18, fontSize: 13, fontWeight: 600 }}>
+        <span>Estado</span>
         <select value={form.status} onChange={(e) => handleChange('status', e.target.value)} style={{ width: '100%', minHeight: 44, boxSizing: 'border-box', borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-secondary)', padding: '10px 12px', fontSize: 13, background: 'var(--color-background-primary)', appearance: 'none' }}>
           {STATUS.map((option) => <option key={option.v} value={option.v}>{option.label}</option>)}
         </select>

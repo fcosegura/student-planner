@@ -1,6 +1,7 @@
 export default function BottomNav({ currentView, setView }) {
   const tabs = [
     { id: 'calendar', label: 'Calendario' },
+    { id: 'schedule', label: 'Horario' },
     { id: 'board', label: 'Tablero' },
   ];
 
@@ -11,6 +12,14 @@ export default function BottomNav({ currentView, setView }) {
         <svg {...common}>
           <rect x="3" y="5" width="18" height="16" rx="3" />
           <path d="M8 3v4M16 3v4M3 10h18" />
+        </svg>
+      );
+    }
+    if (id === 'schedule') {
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v6l4 2" />
         </svg>
       );
     }
