@@ -1,9 +1,12 @@
 #:schema node_modules/wrangler/config-schema.json
 # Deploy (production):
 # 1. npm ci && npm run build
-# 2. wrangler d1 create student-planner-lite-db  → copy database_id into [[d1_databases]] below
-# 3. wrangler d1 execute student-planner-lite-db --remote --file=schema.sql
-# 4. In Google Cloud Console, add the Workers URL to OAuth "Authorized JavaScript origins" (and redirect URIs if used).
+# 2. Si este repo es un fork: `npx wrangler login` y `npx wrangler d1 create student-planner-lite-db`
+#    Copia el UUID nuevo en database_id abajo (el ID del repo no es tu base en tu cuenta).
+# 3. Esquema D1: `npm run db:migrate:remote` (usa ./migrations). No uses la consola SQL del dashboard
+#    para pegar todo el esquema de golpe: suele aceptar solo una sentencia por ejecución.
+#    Alternativa: `npx wrangler d1 execute student-planner-lite-db --remote --file=migrations/0001_initial.sql`
+# 4. Google Cloud Console: añade la URL del Worker a OAuth "Authorized JavaScript origins" (y redirect URIs si aplica).
 # 5. wrangler deploy
 name = "student-planner"
 main = "src/worker.js"
@@ -25,3 +28,4 @@ binding = "ASSETS"
 binding = "DB"
 database_name = "student-planner-lite-db"
 database_id = "6f622e2e-8fb1-4a10-9701-7ed689100500"
+migrations_dir = "migrations"

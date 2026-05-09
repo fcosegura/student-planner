@@ -1,4 +1,6 @@
 -- Cloudflare D1 Schema for Task Manager (With Multi-user and profiles)
+-- https://developers.cloudflare.com/d1/reference/migrations/#foreign-key-constraints
+PRAGMA defer_foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS profiles (
   id TEXT PRIMARY KEY,
