@@ -17,8 +17,10 @@ import {
 } from './storage.js';
 import CalendarView from './components/CalendarView.jsx';
 import BoardView from './components/BoardView.jsx';
+import ScheduleView from './components/ScheduleView.jsx';
 import TaskModal from './components/TaskModal.jsx';
 import EventModal from './components/EventModal.jsx';
+import ScheduleModal from './components/ScheduleModal.jsx';
 import BottomNav from './components/BottomNav.jsx';
 import Login from './components/Login.jsx';
 
@@ -30,6 +32,9 @@ export default function App() {
   const [tasks, setTasks] = useState([]);
   const [boardNotes, setBoardNotes] = useState([]);
   const [events, setEvents] = useState([]);
+  const [scheduleSubjects, setScheduleSubjects] = useState([]);
+  const [scheduleSlots, setScheduleSlots] = useState([]);
+  const [scheduleModal, setScheduleModal] = useState(null);
   const [ready, setReady] = useState(false);
   const [hydratedSession, setHydratedSession] = useState(null);
   const [view, setView] = useState('calendar');
@@ -54,7 +59,13 @@ export default function App() {
   const syncFeedbackTimerRef = useRef(null);
   const syncDebounceTimerRef = useRef(null);
   const lastSyncedPayloadRef = useRef('');
-  const latestPayloadRef = useRef({ tasks: [], boardNotes: [], events: [] });
+  const latestPayloadRef = useRef({
+    tasks: [],
+    boardNotes: [],
+    events: [],
+    scheduleSubjects: [],
+    scheduleSlots: [],
+  });
   const syncInFlightRef = useRef(false);
   const pendingSyncRef = useRef(false);
 
@@ -74,7 +85,7 @@ export default function App() {
   };
 
   const syncNow = async ({ immediate = false } = {}) => {
-    if (!ready || !authenticated || hydratedSession !== authenticated || !activeProfileId) return false;
+    if (!ready || hydratedSession !== authenticated) return false;
     const payload = latestPayloadRef.current;
     const serialized = serializePayload(payload);
     if (!serialized || serialized === lastSyncedPayloadRef.current) return false;
@@ -86,17 +97,21 @@ export default function App() {
 
     if (immediate) clearSyncDebounce();
 
+    const syncCloud = Boolean(authenticated && activeProfileId);
+
     syncInFlightRef.current = true;
-    setSyncState('saving');
+    if (syncCloud) setSyncState('saving');
     try {
-      await saveData(payload, authenticated, activeProfileId);
+      await saveData(payload, syncCloud, activeProfileId);
       lastSyncedPayloadRef.current = serialized;
-      setSyncState('saved');
-      if (syncFeedbackTimerRef.current) window.clearTimeout(syncFeedbackTimerRef.current);
-      syncFeedbackTimerRef.current = window.setTimeout(() => setSyncState('idle'), 1600);
+      if (syncCloud) {
+        setSyncState('saved');
+        if (syncFeedbackTimerRef.current) window.clearTimeout(syncFeedbackTimerRef.current);
+        syncFeedbackTimerRef.current = window.setTimeout(() => setSyncState('idle'), 1600);
+      }
       return true;
     } catch {
-      setSyncState('error');
+      if (syncCloud) setSyncState('error');
       return false;
     } finally {
       syncInFlightRef.current = false;
@@ -127,10 +142,14 @@ export default function App() {
       setTasks(data.tasks);
       setBoardNotes(data.boardNotes);
       setEvents(data.events || []);
+      setScheduleSubjects(data.scheduleSubjects || []);
+      setScheduleSlots(data.scheduleSlots || []);
       const loadedPayload = {
         tasks: data.tasks,
         boardNotes: data.boardNotes,
         events: data.events || [],
+        scheduleSubjects: data.scheduleSubjects || [],
+        scheduleSlots: data.scheduleSlots || [],
       };
       latestPayloadRef.current = loadedPayload;
       lastSyncedPayloadRef.current = serializePayload(loadedPayload);
@@ -182,9 +201,12 @@ export default function App() {
     setAuthenticated(false);
     setReady(false);
     setHydratedSession(null);
+    setScheduleModal(null);
     setTasks([]);
     setBoardNotes([]);
     setEvents([]);
+    setScheduleSubjects([]);
+    setScheduleSlots([]);
     setProfiles([]);
     setActiveProfileId(null);
     setSyncState('idle');
@@ -196,9 +218,12 @@ export default function App() {
     setAuthenticated(false);
     setReady(false);
     setHydratedSession(null);
+    setScheduleModal(null);
     setTasks([]);
     setBoardNotes([]);
     setEvents([]);
+    setScheduleSubjects([]);
+    setScheduleSlots([]);
     setProfiles([]);
     setActiveProfileId(null);
     setSyncState('idle');
@@ -233,14 +258,20 @@ export default function App() {
   }, [authenticated]);
 
   useEffect(() => {
-    latestPayloadRef.current = { tasks, boardNotes, events };
-    if (!ready || !authenticated || hydratedSession !== authenticated || !activeProfileId) return undefined;
+    latestPayloadRef.current = {
+      tasks,
+      boardNotes,
+      events,
+      scheduleSubjects,
+      scheduleSlots,
+    };
+    if (!ready || hydratedSession !== authenticated) return undefined;
     clearSyncDebounce();
     syncDebounceTimerRef.current = window.setTimeout(() => {
       void syncNow();
     }, 2000);
     return () => clearSyncDebounce();
-  }, [tasks, boardNotes, events, ready, authenticated, hydratedSession, activeProfileId]);
+  }, [tasks, boardNotes, events, scheduleSubjects, scheduleSlots, ready, authenticated, hydratedSession, activeProfileId]);
 
   useEffect(() => {
     if (!authenticated) return undefined;
@@ -272,6 +303,7 @@ export default function App() {
       if (e.key === 'Escape') {
         setModal(null);
         setEventModal(null);
+        setScheduleModal(null);
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -291,7 +323,7 @@ export default function App() {
     const fileName = `student-planner-lite-backup-${date}.json`;
 
     if (!authenticated || !Array.isArray(profiles) || profiles.length === 0) {
-      const payload = { tasks, boardNotes, events };
+      const payload = { tasks, boardNotes, events, scheduleSubjects, scheduleSlots };
       if (!validateBackupPayload(payload)) {
         setBackupMessage('Error: los datos internos están corruptos y no se puede exportar el backup.');
         setTimeout(() => setBackupMessage(''), 5000);
@@ -305,7 +337,7 @@ export default function App() {
 
     setBackupMessage('Exportando todos los espacios...');
     try {
-      const activePayload = { tasks, boardNotes, events };
+      const activePayload = { tasks, boardNotes, events, scheduleSubjects, scheduleSlots };
       const workspacesData = await Promise.all(
         profiles.map(async (profile) => {
           const data = profile.id === activeProfileId
@@ -339,16 +371,22 @@ export default function App() {
     const sourceTasks = Array.isArray(parsed) ? parsed : parsed?.tasks;
     const sourceNotes = Array.isArray(parsed?.boardNotes) ? parsed.boardNotes : null;
     const sourceEvents = Array.isArray(parsed?.events) ? parsed.events : null;
+    const sourceSubjects = Array.isArray(parsed?.scheduleSubjects) ? parsed.scheduleSubjects : null;
+    const sourceSlots = Array.isArray(parsed?.scheduleSlots) ? parsed.scheduleSlots : null;
     const droppedInvalidItems =
       normalized.tasks.length !== sourceTasks?.length ||
       (sourceNotes && normalized.boardNotes.length !== sourceNotes.length) ||
-      (sourceEvents && normalized.events.length !== sourceEvents.length);
+      (sourceEvents && normalized.events.length !== sourceEvents.length) ||
+      (sourceSubjects && normalized.scheduleSubjects.length !== sourceSubjects.length) ||
+      (sourceSlots && normalized.scheduleSlots.length !== sourceSlots.length);
     if (!hasImportShape || droppedInvalidItems || !validateBackupPayload(normalized)) {
       throw new Error('El archivo JSON no tiene la estructura esperada.');
     }
     setTasks(normalized.tasks);
     setBoardNotes(normalized.boardNotes);
     setEvents(normalized.events);
+    setScheduleSubjects(normalized.scheduleSubjects || []);
+    setScheduleSlots(normalized.scheduleSlots || []);
     setModal(null);
     setEventModal(null);
     setBackupMessage('Importación completada correctamente.');
@@ -388,6 +426,8 @@ export default function App() {
           tasks: workspace.tasks,
           boardNotes: workspace.boardNotes,
           events: workspace.events,
+          scheduleSubjects: workspace.scheduleSubjects || [],
+          scheduleSlots: workspace.scheduleSlots || [],
         };
         await saveData(payload, true, targetProfile.id);
         restoredCount += 1;
@@ -493,6 +533,122 @@ export default function App() {
   const deleteEvent = (id) => { setEvents((p) => p.filter((e) => e.id !== id)); setEventModal(null); };
   const openEventModal = (init = {}) => setEventModal({ title: '', startDate: '', endDate: '', color: '#2563eb', ...init });
 
+  const NEW_SCHEDULE_SUBJECT = '__new__';
+
+  const handleScheduleSave = (data) => {
+    const {
+      subjectChoice,
+      name,
+      color,
+      validFrom,
+      validTo,
+      weekdays,
+      startTime,
+      durationMinutes,
+    } = data;
+
+    const upsertSubjectMeta = (subjectId) => {
+      setScheduleSubjects((p) => p.map((s) => (s.id === subjectId ? {
+        ...s,
+        name,
+        color,
+        validFrom,
+        validTo,
+      } : s)));
+    };
+
+    const createNewSubject = () => {
+      const subjectId = uid();
+      setScheduleSubjects((p) => [...p, {
+        id: subjectId,
+        name,
+        color,
+        validFrom,
+        validTo,
+      }]);
+      return subjectId;
+    };
+
+    const resolveSubjectId = () => {
+      if (subjectChoice === NEW_SCHEDULE_SUBJECT) return createNewSubject();
+      upsertSubjectMeta(subjectChoice);
+      return subjectChoice;
+    };
+
+    if (scheduleModal?.mode === 'add') {
+      const subjectId = resolveSubjectId();
+      setScheduleSlots((p) => [
+        ...p,
+        ...weekdays.map((wd) => ({
+          id: uid(),
+          subjectId,
+          weekday: wd,
+          startTime,
+          durationMinutes,
+        })),
+      ]);
+      setScheduleModal(null);
+      return;
+    }
+
+    if (scheduleModal?.mode === 'edit' && scheduleModal.slotId) {
+      const slotId = scheduleModal.slotId;
+      const existing = scheduleSlots.find((s) => s.id === slotId);
+      if (!existing) {
+        setScheduleModal(null);
+        return;
+      }
+
+      let subjectId;
+      if (subjectChoice === NEW_SCHEDULE_SUBJECT) {
+        subjectId = createNewSubject();
+      } else {
+        upsertSubjectMeta(subjectChoice);
+        subjectId = subjectChoice;
+      }
+
+      const nextSlots = [
+        ...scheduleSlots.filter((s) => s.id !== slotId),
+        ...weekdays.map((wd) => ({
+          id: uid(),
+          subjectId,
+          weekday: wd,
+          startTime,
+          durationMinutes,
+        })),
+      ];
+      const usedSubjectIds = new Set(nextSlots.map((s) => s.subjectId));
+      setScheduleSlots(nextSlots);
+      setScheduleSubjects((subs) => subs.filter((s) => usedSubjectIds.has(s.id)));
+      setScheduleModal(null);
+      return;
+    }
+
+    setScheduleModal(null);
+  };
+
+  const deleteScheduleSlotOnly = (slotId) => {
+    const slot = scheduleSlots.find((s) => s.id === slotId);
+    if (!slot) {
+      setScheduleModal(null);
+      return;
+    }
+    const subjId = slot.subjectId;
+    const nextSlots = scheduleSlots.filter((s) => s.id !== slotId);
+    const stillHasSubject = nextSlots.some((s) => s.subjectId === subjId);
+    setScheduleSlots(nextSlots);
+    if (!stillHasSubject) {
+      setScheduleSubjects((p) => p.filter((s) => s.id !== subjId));
+    }
+    setScheduleModal(null);
+  };
+
+  const deleteScheduleSubjectEverywhere = (subjectId) => {
+    setScheduleSubjects((p) => p.filter((s) => s.id !== subjectId));
+    setScheduleSlots((p) => p.filter((s) => s.subjectId !== subjectId));
+    setScheduleModal(null);
+  };
+
   const handleQuickAdd = (nameInput) => {
     if (!nameInput.trim()) return;
     const parsed = parseDateTimeFromDescription(nameInput);
@@ -519,6 +675,7 @@ export default function App() {
   const activeProfile = profiles.find((profile) => profile.id === activeProfileId) || profiles[0] || null;
   const activeProfileName = activeProfile?.name || 'Estudios';
   const profileGlyph = (activeProfileName[0] || 'E').toUpperCase();
+  const mainViewTitle = view === 'calendar' ? 'Calendario' : view === 'schedule' ? 'Horario' : 'Tablero';
 
   const handleSelectProfile = (profileId) => {
     if (!profileId || profileId === activeProfileId) {
@@ -530,9 +687,12 @@ export default function App() {
     setView('calendar');
     setModal(null);
     setEventModal(null);
+    setScheduleModal(null);
     setTasks([]);
     setBoardNotes([]);
     setEvents([]);
+    setScheduleSubjects([]);
+    setScheduleSlots([]);
     setReady(false);
     setShowProfileMenu(false);
   };
@@ -557,7 +717,7 @@ export default function App() {
       setTimeout(() => setBackupMessage(''), 4000);
       return;
     }
-    const confirmed = window.confirm(`Vas a borrar "${profile.name}" y todas sus tareas, notas y eventos. Esta acción no se puede deshacer.\n\n¿Continuar?`);
+    const confirmed = window.confirm(`Vas a borrar "${profile.name}" y todas sus tareas, notas, eventos y horario. Esta acción no se puede deshacer.\n\n¿Continuar?`);
     if (!confirmed) return;
     try {
       const result = await deleteProfile(profile.id);
@@ -595,6 +755,7 @@ export default function App() {
 
   const tByDate = {};
   tasks.forEach((t) => { if (t.date) { (tByDate[t.date] = tByDate[t.date] || []).push(t); } });
+  const tasksUndated = tasks.filter((t) => !t.date);
 
   const eByDate = {};
   events.forEach((e) => {
@@ -668,9 +829,13 @@ export default function App() {
             )}
           </div>
           <div className="brand-copy">
-            <span className="brand-title">{view === 'calendar' ? 'Calendario' : 'Tablero'}</span>
+            <span className="brand-title">{mainViewTitle}</span>
             <span className="brand-subtitle hide-mobile">
-              {view === 'board' ? `Notas · ${activeProfileName}` : `Espacio: ${activeProfileName}`}
+              {view === 'board'
+                ? `Notas · ${activeProfileName}`
+                : view === 'schedule'
+                  ? `Semana · ${activeProfileName}`
+                  : `Espacio: ${activeProfileName}`}
             </span>
           </div>
         </div>
@@ -678,6 +843,7 @@ export default function App() {
         <div className="desktop-tabs hide-mobile">
           {[
             ['calendar', 'Calendario'],
+            ['schedule', 'Horario'],
             ['board', 'Tablero'],
           ].map(([v, l]) => (
             <button key={v} type="button" className={view === v ? 'active' : ''} onClick={() => setView(v)}>{l}</button>
@@ -713,20 +879,32 @@ export default function App() {
           </div>
           <button
             type="button"
-            onClick={() => (view === 'board'
-              ? addBoardNote({
-                id: uid(),
-                title: '',
-                text: '',
-                createdAt: new Date().toISOString(),
-                x: 20 + Math.random() * 40,
-                y: 20 + Math.random() * 40,
-              })
-              : open())}
-            aria-label={view === 'board' ? 'Crear nueva nota' : 'Crear nueva tarea'}
+            onClick={() => {
+              if (view === 'board') {
+                addBoardNote({
+                  id: uid(),
+                  title: '',
+                  text: '',
+                  createdAt: new Date().toISOString(),
+                  x: 20 + Math.random() * 40,
+                  y: 20 + Math.random() * 40,
+                });
+              } else if (view === 'schedule') {
+                setScheduleModal({ mode: 'add' });
+              } else {
+                open();
+              }
+            }}
+            aria-label={
+              view === 'board'
+                ? 'Crear nueva nota'
+                : view === 'schedule'
+                  ? 'Añadir asignatura al horario'
+                  : 'Crear nueva tarea'
+            }
             className="primary-button"
           >
-            {view === 'board' ? '+ Nota' : '+ Tarea'}
+            {view === 'board' ? '+ Nota' : view === 'schedule' ? '+ Asignatura' : '+ Tarea'}
           </button>
         </div>
       </header>
@@ -741,11 +919,19 @@ export default function App() {
         <section className="overview-panel compact">
           <div>
             <p className="eyebrow">Student Planner Lite</p>
-            <h1>{view === 'calendar' ? 'Tu semana y entregas' : 'Ideas y apuntes sueltos'}</h1>
+            <h1>
+              {view === 'calendar'
+                ? 'Tu semana y entregas'
+                : view === 'schedule'
+                  ? 'Clases por día'
+                  : 'Ideas y apuntes sueltos'}
+            </h1>
             <p style={{ margin: '8px 0 0', fontSize: 14, color: 'var(--color-text-secondary)', maxWidth: 520 }}>
               {view === 'calendar'
                 ? 'Elige un día en la cuadrícula para ver la lista. Doble clic en un día crea una tarea con esa fecha.'
-                : 'Post-its en un lienzo infinito para mapas mentales o recordatorios visuales.'}
+                : view === 'schedule'
+                  ? 'Vista semanal: cada asignatura puede tener distinto día, hora y duración. Toca una franja para editarla o borrarla.'
+                  : 'Post-its en un lienzo infinito para mapas mentales o recordatorios visuales.'}
             </p>
           </div>
           {view === 'calendar' && (
@@ -778,30 +964,37 @@ export default function App() {
           )}
         </section>
 
-        {view === 'calendar'
-          ? (
-            <CalendarView
-              y={y}
-              mo={mo}
-              dIM={dIM}
-              fD={fD}
-              tByDate={tByDate}
-              eByDate={eByDate}
-              todayStr={todayStr}
-              prev={() => setCalDate(new Date(y, mo - 1, 1))}
-              next={() => setCalDate(new Date(y, mo + 1, 1))}
-              selDay={selDay}
-              setSelDay={setSelDay}
-              onAddTaskForDay={(date) => open({ date })}
-              onEditTask={(t) => setModal(t)}
-              onToggleTaskDone={toggleDone}
-              onAddEventForDay={(date) => openEventModal({ startDate: date, endDate: date })}
-              onEditEvent={(e) => openEventModal(e)}
-            />
-          )
-          : (
-            <BoardView notes={boardNotes} onAddNote={addBoardNote} onUpdateNote={updateBoardNote} onDeleteNote={deleteBoardNote} />
-          )}
+        {view === 'calendar' && (
+          <CalendarView
+            y={y}
+            mo={mo}
+            dIM={dIM}
+            fD={fD}
+            tByDate={tByDate}
+            eByDate={eByDate}
+            tasksUndated={tasksUndated}
+            todayStr={todayStr}
+            prev={() => setCalDate(new Date(y, mo - 1, 1))}
+            next={() => setCalDate(new Date(y, mo + 1, 1))}
+            selDay={selDay}
+            setSelDay={setSelDay}
+            onAddTaskForDay={(date) => open({ date })}
+            onEditTask={(t) => setModal(t)}
+            onToggleTaskDone={toggleDone}
+            onAddEventForDay={(date) => openEventModal({ startDate: date, endDate: date })}
+            onEditEvent={(e) => openEventModal(e)}
+          />
+        )}
+        {view === 'schedule' && (
+          <ScheduleView
+            scheduleSubjects={scheduleSubjects}
+            scheduleSlots={scheduleSlots}
+            onSelectSlot={(slotId) => setScheduleModal({ mode: 'edit', slotId })}
+          />
+        )}
+        {view === 'board' && (
+          <BoardView notes={boardNotes} onAddNote={addBoardNote} onUpdateNote={updateBoardNote} onDeleteNote={deleteBoardNote} />
+        )}
       </main>
 
       {modal && (
@@ -813,6 +1006,45 @@ export default function App() {
       {eventModal && (
         <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && setEventModal(null)}>
           <EventModal key={eventModal.id || 'new-event'} event={eventModal} onSave={upsertEvent} onDelete={eventModal.id ? () => deleteEvent(eventModal.id) : null} onClose={() => setEventModal(null)} />
+        </div>
+      )}
+
+      {scheduleModal && (
+        <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && setScheduleModal(null)}>
+          <ScheduleModal
+            key={scheduleModal.mode === 'edit' ? scheduleModal.slotId : `new-schedule-${scheduleSubjects.length}`}
+            mode={scheduleModal.mode}
+            scheduleSubjects={scheduleSubjects}
+            subject={
+              scheduleModal.mode === 'edit'
+                ? scheduleSubjects.find((s) => s.id === scheduleSlots.find((sl) => sl.id === scheduleModal.slotId)?.subjectId)
+                : null
+            }
+            slot={scheduleModal.mode === 'edit' ? scheduleSlots.find((sl) => sl.id === scheduleModal.slotId) : null}
+            onSave={handleScheduleSave}
+            onClose={() => setScheduleModal(null)}
+            onRemoveSubject={(subjectId) => {
+              if (window.confirm('¿Eliminar esta asignatura y todas sus franjas del horario?')) {
+                deleteScheduleSubjectEverywhere(subjectId);
+              }
+            }}
+            onDeleteThisSlot={
+              scheduleModal.mode === 'edit'
+                ? () => deleteScheduleSlotOnly(scheduleModal.slotId)
+                : undefined
+            }
+            onDeleteWholeSubject={
+              scheduleModal.mode === 'edit'
+                ? () => {
+                  const sl = scheduleSlots.find((s) => s.id === scheduleModal.slotId);
+                  const sub = sl && scheduleSubjects.find((s) => s.id === sl.subjectId);
+                  if (sub && window.confirm(`¿Quitar "${sub.name}" de todos los días del horario?`)) {
+                    deleteScheduleSubjectEverywhere(sub.id);
+                  }
+                }
+                : undefined
+            }
+          />
         </div>
       )}
 

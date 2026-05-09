@@ -8,9 +8,11 @@ function clonePayload(payload) {
       tasks: Array.isArray(payload?.tasks) ? payload.tasks : [],
       boardNotes: Array.isArray(payload?.boardNotes) ? payload.boardNotes : [],
       events: Array.isArray(payload?.events) ? payload.events : [],
+      scheduleSubjects: Array.isArray(payload?.scheduleSubjects) ? payload.scheduleSubjects : [],
+      scheduleSlots: Array.isArray(payload?.scheduleSlots) ? payload.scheduleSlots : [],
     }));
   } catch {
-    return { tasks: [], boardNotes: [], events: [] };
+    return { tasks: [], boardNotes: [], events: [], scheduleSubjects: [], scheduleSlots: [] };
   }
 }
 
@@ -53,6 +55,8 @@ function buildIncrementalOps(previousPayload, nextPayload) {
     tasks: diffEntityOps(previousPayload?.tasks || [], nextPayload?.tasks || []),
     notes: diffEntityOps(previousPayload?.boardNotes || [], nextPayload?.boardNotes || []),
     events: diffEntityOps(previousPayload?.events || [], nextPayload?.events || []),
+    scheduleSubjects: diffEntityOps(previousPayload?.scheduleSubjects || [], nextPayload?.scheduleSubjects || []),
+    scheduleSlots: diffEntityOps(previousPayload?.scheduleSlots || [], nextPayload?.scheduleSlots || []),
   };
 }
 
@@ -60,7 +64,9 @@ function hasAnyOps(ops) {
   return (
     (ops.tasks.upserts.length + ops.tasks.deletes.length) > 0 ||
     (ops.notes.upserts.length + ops.notes.deletes.length) > 0 ||
-    (ops.events.upserts.length + ops.events.deletes.length) > 0
+    (ops.events.upserts.length + ops.events.deletes.length) > 0 ||
+    (ops.scheduleSubjects.upserts.length + ops.scheduleSubjects.deletes.length) > 0 ||
+    (ops.scheduleSlots.upserts.length + ops.scheduleSlots.deletes.length) > 0
   );
 }
 
@@ -84,7 +90,7 @@ function readLocalPayload(profileId) {
       console.error("Error cargando local (legacy):", e);
     }
   }
-  return { tasks: [], boardNotes: [], events: [] };
+  return { tasks: [], boardNotes: [], events: [], scheduleSubjects: [], scheduleSlots: [] };
 }
 
 function hasAnyData(payload) {
@@ -92,7 +98,9 @@ function hasAnyData(payload) {
   return (
     (Array.isArray(payload.tasks) && payload.tasks.length > 0) ||
     (Array.isArray(payload.boardNotes) && payload.boardNotes.length > 0) ||
-    (Array.isArray(payload.events) && payload.events.length > 0)
+    (Array.isArray(payload.events) && payload.events.length > 0) ||
+    (Array.isArray(payload.scheduleSubjects) && payload.scheduleSubjects.length > 0) ||
+    (Array.isArray(payload.scheduleSlots) && payload.scheduleSlots.length > 0)
   );
 }
 
@@ -175,31 +183,86 @@ export function isValidBoardNote(note) {
   );
 }
 
+const SCHEDULE_TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+function isValidOptionalIsoDate(value) {
+  if (value === undefined || value === null || value === '') return true;
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+export function isValidScheduleSubject(subject) {
+  if (!subject || typeof subject !== 'object') return false;
+  const { id, name, color, validFrom, validTo } = subject;
+  if (typeof id !== 'string' || typeof name !== 'string') return false;
+  if (color !== undefined && color !== null && typeof color !== 'string') return false;
+  if (!isValidOptionalIsoDate(validFrom) || !isValidOptionalIsoDate(validTo)) return false;
+  return true;
+}
+
+export function isValidScheduleSlot(slot) {
+  if (!slot || typeof slot !== 'object') return false;
+  const { id, subjectId, weekday, startTime, durationMinutes } = slot;
+  if (typeof id !== 'string' || typeof subjectId !== 'string') return false;
+  if (typeof weekday !== 'number' || !Number.isInteger(weekday) || weekday < 0 || weekday > 6) return false;
+  if (typeof startTime !== 'string' || !SCHEDULE_TIME_RE.test(startTime)) return false;
+  if (typeof durationMinutes !== 'number' || !Number.isInteger(durationMinutes) || durationMinutes <= 0) return false;
+  return true;
+}
+
+function normalizeScheduleSubject(subject) {
+  return {
+    ...subject,
+    name: typeof subject.name === 'string' ? subject.name : '',
+    color: typeof subject.color === 'string' && subject.color.trim() ? subject.color.trim() : '#6366f1',
+    validFrom: typeof subject.validFrom === 'string' ? subject.validFrom.trim() : '',
+    validTo: typeof subject.validTo === 'string' ? subject.validTo.trim() : '',
+  };
+}
+
+function normalizeScheduleSlot(slot) {
+  const wd = typeof slot.weekday === 'number' && Number.isInteger(slot.weekday) ? slot.weekday : 0;
+  const dm = typeof slot.durationMinutes === 'number' && Number.isInteger(slot.durationMinutes) && slot.durationMinutes > 0 ? slot.durationMinutes : 60;
+  return {
+    ...slot,
+    subjectId: typeof slot.subjectId === 'string' ? slot.subjectId : '',
+    weekday: Math.min(6, Math.max(0, wd)),
+    startTime: typeof slot.startTime === 'string' && SCHEDULE_TIME_RE.test(slot.startTime) ? slot.startTime : '09:00',
+    durationMinutes: dm,
+  };
+}
+
 export function validateBackupPayload(payload) {
   if (!payload || typeof payload !== 'object') return false;
   if (!Array.isArray(payload.tasks) || !payload.tasks.every(isValidTask)) return false;
   if (payload.boardNotes !== undefined && (!Array.isArray(payload.boardNotes) || !payload.boardNotes.every(isValidBoardNote))) return false;
   if (payload.events !== undefined && (!Array.isArray(payload.events) || !payload.events.every(isValidEvent))) return false;
+  if (payload.scheduleSubjects !== undefined && (!Array.isArray(payload.scheduleSubjects) || !payload.scheduleSubjects.every(isValidScheduleSubject))) return false;
+  if (payload.scheduleSlots !== undefined && (!Array.isArray(payload.scheduleSlots) || !payload.scheduleSlots.every(isValidScheduleSlot))) return false;
   return true;
 }
 
 export function normalizeDataPayload(parsed) {
   if (Array.isArray(parsed)) {
-    const tasks = parsed.map(normalizeTask);
-    if (tasks.every(isValidTask)) return { tasks, boardNotes: [], events: [] };
+    const tasks = parsed.map(normalizeTask).filter(isValidTask);
+    return { tasks, boardNotes: [], events: [], scheduleSubjects: [], scheduleSlots: [] };
   }
   if (parsed && typeof parsed === 'object' && Array.isArray(parsed.tasks)) {
-    const tasks = parsed.tasks.map(normalizeTask);
-    if (!tasks.every(isValidTask)) return { tasks: [], boardNotes: [], events: [] };
+    const tasks = parsed.tasks.map(normalizeTask).filter(isValidTask);
     const boardNotes = Array.isArray(parsed.boardNotes)
       ? parsed.boardNotes.map(normalizeBoardNote).filter(isValidBoardNote)
       : [];
     const events = Array.isArray(parsed.events)
       ? parsed.events.map(normalizeEvent).filter(isValidEvent)
       : [];
-    return { tasks, boardNotes, events };
+    const scheduleSubjects = Array.isArray(parsed.scheduleSubjects)
+      ? parsed.scheduleSubjects.map(normalizeScheduleSubject).filter(isValidScheduleSubject)
+      : [];
+    const scheduleSlots = Array.isArray(parsed.scheduleSlots)
+      ? parsed.scheduleSlots.map(normalizeScheduleSlot).filter(isValidScheduleSlot)
+      : [];
+    return { tasks, boardNotes, events, scheduleSubjects, scheduleSlots };
   }
-  return { tasks: [], boardNotes: [], events: [] };
+  return { tasks: [], boardNotes: [], events: [], scheduleSubjects: [], scheduleSlots: [] };
 }
 
 export function isMultiBackupPayload(parsed) {
@@ -233,10 +296,14 @@ export function normalizeMultiBackupPayload(parsed) {
       const sourceTaskCount = Array.isArray(raw.tasks) ? raw.tasks.length : 0;
       const sourceNoteCount = Array.isArray(raw.boardNotes) ? raw.boardNotes.length : 0;
       const sourceEventCount = Array.isArray(raw.events) ? raw.events.length : 0;
+      const sourceSubjectCount = Array.isArray(raw.scheduleSubjects) ? raw.scheduleSubjects.length : 0;
+      const sourceSlotCount = Array.isArray(raw.scheduleSlots) ? raw.scheduleSlots.length : 0;
       const droppedItems =
         normalized.tasks.length !== sourceTaskCount ||
         normalized.boardNotes.length !== sourceNoteCount ||
-        normalized.events.length !== sourceEventCount;
+        normalized.events.length !== sourceEventCount ||
+        normalized.scheduleSubjects.length !== sourceSubjectCount ||
+        normalized.scheduleSlots.length !== sourceSlotCount;
       if (droppedItems) return null;
       return {
         id: typeof raw.id === 'string' ? raw.id : null,

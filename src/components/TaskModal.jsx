@@ -2,13 +2,46 @@ import { useState } from 'react';
 import { STATUS, PRIORITY } from '../constants.js';
 import { fmtDate, parseDateTimeFromDescription, parseDescriptionDateResult, cleanDescriptionSegment } from '../utils.jsx';
 
+const HOUR_OPTS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+const MINUTE_OPTS = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+
+const selectLike = {
+  width: '100%',
+  minHeight: 44,
+  boxSizing: 'border-box',
+  borderRadius: 'var(--border-radius-md)',
+  border: '0.5px solid var(--color-border-secondary)',
+  padding: '10px 12px',
+  fontSize: 13,
+  background: 'var(--color-background-primary)',
+  appearance: 'none',
+};
+
+/** Stored tasks use HH:mm or ''; keeps imports/sync safe across browsers. */
+function normalizeTimeForInput(value) {
+  if (value == null || value === '') return '';
+  const s = String(value).trim();
+  const m = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!m) return '';
+  const hh = Math.min(23, Math.max(0, parseInt(m[1], 10)));
+  const mm = Math.min(59, Math.max(0, parseInt(m[2], 10)));
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+}
+
+function splitTime(timeStr) {
+  const n = normalizeTimeForInput(timeStr);
+  if (!n) return { hour: '', minute: '' };
+  const [h, m] = n.split(':');
+  return { hour: h, minute: m };
+}
+
 export default function TaskModal({ task, onSave, onDelete, onClose }) {
   const [form, setForm] = useState({
     ...task,
     name: task.name || '',
     notes: task.notes || '',
     subtasks: task.subtasks || [],
-    time: task.time || '',
+    time: normalizeTimeForInput(task.time),
   });
 
   const handleChange = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
@@ -21,7 +54,12 @@ export default function TaskModal({ task, onSave, onDelete, onClose }) {
     if (!result?.text || cleaned === form.name.trim()) {
       cleaned = cleaned.replace(/(?:\b(?:a|al|a la|a las|el|la|en|para)\b.*)$/i, '').replace(/\s{2,}/g, ' ').trim();
     }
-    setForm((prev) => ({ ...prev, name: cleaned || form.name.trim(), date: preview.date, time: preview.time || prev.time }));
+    setForm((prev) => ({
+      ...prev,
+      name: cleaned || form.name.trim(),
+      date: preview.date,
+      time: normalizeTimeForInput(preview.time || prev.time),
+    }));
   };
 
   const onSubmit = (e) => {
@@ -37,62 +75,101 @@ export default function TaskModal({ task, onSave, onDelete, onClose }) {
       dependencyTaskIds: [],
       hideInKanbanDone: false,
       date: form.date || parsed?.date || '',
-      time: form.time || parsed?.time || '',
+      time: normalizeTimeForInput(form.time || parsed?.time || ''),
     });
   };
 
   const preview = parseDateTimeFromDescription(form.name || '');
   const previewLabel = preview ? `Detectado: ${fmtDate(preview.date)}${preview.time ? ` · ${preview.time}` : ''}` : null;
 
+  const { hour: timeHour, minute: timeMinute } = splitTime(form.time);
+
   return (
     <form className="liquid-glass-modal" onSubmit={onSubmit} style={{ width: 'min(420px, 100%)', maxWidth: 'calc(100% - 32px)', borderRadius: 'var(--border-radius-lg)', padding: 24, color: 'var(--color-text-primary)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: 18, fontWeight: 700 }}>{task.id ? 'Editar tarea' : 'Nueva tarea'}</div>
-          <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 4 }}>
+          <div style={{ fontSize: 13, color: 'var(--color-text-primary)', opacity: 0.82, marginTop: 4 }}>
             Ideal para entregas, exámenes y recordatorios.
           </div>
         </div>
         <button type="button" onClick={onClose} aria-label="Cerrar modal" style={{ border: 'none', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 22, lineHeight: 1 }}>×</button>
       </div>
 
-      <label style={{ display: 'block', marginBottom: 14, fontSize: 13, color: 'var(--color-text-secondary)' }}>
+      <label style={{ display: 'block', marginBottom: 14, fontSize: 13, fontWeight: 600 }}>
         Qué tienes que hacer
         <input value={form.name} onChange={(e) => handleChange('name', e.target.value)} placeholder="Ej: Entregar trabajo de historia" style={{ width: '100%', boxSizing: 'border-box', marginTop: 6, borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-secondary)', padding: 10, fontSize: 13 }} />
       </label>
 
       {previewLabel && (
-        <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, fontSize: 12, color: 'var(--color-text-secondary)', background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.18)', borderRadius: 'var(--border-radius-md)', padding: '10px 12px' }}>
+        <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, fontSize: 12, color: 'var(--color-text-primary)', opacity: 0.9, background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.18)', borderRadius: 'var(--border-radius-md)', padding: '10px 12px' }}>
           <span>{previewLabel}</span>
           <button type="button" onClick={fillDateTime} style={{ border: 'none', background: 'rgba(37,99,235,0.12)', color: 'var(--color-accent)', borderRadius: '999px', padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>Usar fecha</button>
         </div>
       )}
 
-      <label style={{ display: 'block', marginBottom: 14, fontSize: 13, color: 'var(--color-text-secondary)' }}>
+      <label style={{ display: 'block', marginBottom: 14, fontSize: 13, fontWeight: 600 }}>
         Notas (opcional)
         <textarea value={form.notes || ''} onChange={(e) => handleChange('notes', e.target.value)} rows={3} placeholder="Detalles, enlace en texto, etc." style={{ width: '100%', boxSizing: 'border-box', marginTop: 6, borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-secondary)', padding: 10, fontSize: 13, resize: 'vertical' }} />
       </label>
 
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14, fontSize: 13, color: 'var(--color-text-secondary)' }}>
-        <span style={{ fontWeight: 500 }}>Prioridad</span>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14, fontSize: 13, fontWeight: 600 }}>
+        <span>Prioridad</span>
         <select value={form.priority || 'medium'} onChange={(e) => handleChange('priority', e.target.value)} style={{ width: '100%', minHeight: 44, boxSizing: 'border-box', borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-secondary)', padding: '10px 12px', fontSize: 13, background: 'var(--color-background-primary)', appearance: 'none' }}>
           {PRIORITY.map((option) => <option key={option.v} value={option.v}>{option.label}</option>)}
         </select>
       </label>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: 'var(--color-text-secondary)' }}>
-          <span style={{ fontWeight: 500 }}>Fecha</span>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600 }}>
+          <span>Fecha</span>
           <input type="date" value={form.date || ''} onChange={(e) => handleChange('date', e.target.value)} style={{ width: '100%', height: 44, boxSizing: 'border-box', borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-secondary)', padding: '10px 12px', fontSize: 13, background: 'var(--color-background-primary)', appearance: 'none' }} />
         </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: 'var(--color-text-secondary)' }}>
-          <span style={{ fontWeight: 500 }}>Hora</span>
-          <input type="time" value={form.time || ''} onChange={(e) => handleChange('time', e.target.value)} style={{ width: '100%', height: 44, boxSizing: 'border-box', borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-secondary)', padding: '10px 12px', fontSize: 13, background: 'var(--color-background-primary)', appearance: 'none' }} />
-        </label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600 }}>
+          <span>Hora</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <select
+              aria-label="Hora"
+              value={timeHour}
+              onChange={(e) => {
+                const h = e.target.value;
+                if (!h) {
+                  handleChange('time', '');
+                  return;
+                }
+                const m = timeMinute || '00';
+                handleChange('time', `${h}:${m}`);
+              }}
+              style={{ ...selectLike, flex: 1, minWidth: 0 }}
+            >
+              <option value="">—</option>
+              {HOUR_OPTS.map((h) => <option key={h} value={h}>{h}</option>)}
+            </select>
+            <span style={{ color: 'var(--color-text-primary)', fontWeight: 600, flex: '0 0 auto' }}>:</span>
+            <select
+              aria-label="Minutos"
+              value={timeMinute || '00'}
+              disabled={!timeHour}
+              onChange={(e) => {
+                const mi = e.target.value;
+                if (!timeHour) return;
+                handleChange('time', `${timeHour}:${mi}`);
+              }}
+              style={{
+                ...selectLike,
+                flex: 1,
+                minWidth: 0,
+                opacity: timeHour ? 1 : 0.55,
+              }}
+            >
+              {MINUTE_OPTS.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+        </div>
       </div>
 
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18, fontSize: 13, color: 'var(--color-text-secondary)' }}>
-        <span style={{ fontWeight: 500 }}>Estado</span>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18, fontSize: 13, fontWeight: 600 }}>
+        <span>Estado</span>
         <select value={form.status} onChange={(e) => handleChange('status', e.target.value)} style={{ width: '100%', minHeight: 44, boxSizing: 'border-box', borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-secondary)', padding: '10px 12px', fontSize: 13, background: 'var(--color-background-primary)', appearance: 'none' }}>
           {STATUS.map((option) => <option key={option.v} value={option.v}>{option.label}</option>)}
         </select>

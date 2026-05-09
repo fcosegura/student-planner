@@ -120,6 +120,46 @@ function isValidEvent(event) {
   );
 }
 
+const SCHEDULE_TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+function isValidScheduleTimeValue(value) {
+  return typeof value === 'string' && SCHEDULE_TIME_RE.test(value);
+}
+
+function isValidOptionalIsoDate(value) {
+  if (value === undefined || value === null || value === '') return true;
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function isValidScheduleSubject(subject) {
+  return (
+    subject &&
+    typeof subject === 'object' &&
+    typeof subject.id === 'string' &&
+    typeof subject.name === 'string' &&
+    (subject.color === undefined || subject.color === null || typeof subject.color === 'string') &&
+    isValidOptionalIsoDate(subject.validFrom) &&
+    isValidOptionalIsoDate(subject.validTo)
+  );
+}
+
+function isValidScheduleSlot(slot) {
+  return (
+    slot &&
+    typeof slot === 'object' &&
+    typeof slot.id === 'string' &&
+    typeof slot.subjectId === 'string' &&
+    typeof slot.weekday === 'number' &&
+    Number.isInteger(slot.weekday) &&
+    slot.weekday >= 0 &&
+    slot.weekday <= 6 &&
+    isValidScheduleTimeValue(slot.startTime) &&
+    typeof slot.durationMinutes === 'number' &&
+    Number.isInteger(slot.durationMinutes) &&
+    slot.durationMinutes > 0
+  );
+}
+
 function isValidPayload(payload) {
   return (
     payload &&
@@ -129,7 +169,11 @@ function isValidPayload(payload) {
     Array.isArray(payload.boardNotes) &&
     payload.boardNotes.every(isValidNote) &&
     Array.isArray(payload.events) &&
-    payload.events.every(isValidEvent)
+    payload.events.every(isValidEvent) &&
+    Array.isArray(payload.scheduleSubjects) &&
+    payload.scheduleSubjects.every(isValidScheduleSubject) &&
+    Array.isArray(payload.scheduleSlots) &&
+    payload.scheduleSlots.every(isValidScheduleSlot)
   );
 }
 
@@ -152,16 +196,18 @@ function normalizeSyncBody(body) {
   );
 
   if (body.ops && typeof body.ops === 'object') {
-    const { tasks, notes, events } = body.ops;
+    const { tasks, notes, events, scheduleSubjects, scheduleSlots } = body.ops;
     if (
       isValidOpsGroup(tasks, isValidTask) &&
       isValidOpsGroup(notes, isValidNote) &&
-      isValidOpsGroup(events, isValidEvent)
+      isValidOpsGroup(events, isValidEvent) &&
+      isValidOpsGroup(scheduleSubjects, isValidScheduleSubject) &&
+      isValidOpsGroup(scheduleSlots, isValidScheduleSlot)
     ) {
       return {
         profileId: typeof body.profileId === 'string' ? body.profileId : null,
         mode: 'ops',
-        ops: { tasks, notes, events }
+        ops: { tasks, notes, events, scheduleSubjects, scheduleSlots }
       };
     }
   }
@@ -302,6 +348,47 @@ function prepareEventUpsert(env, profileId, userId, event) {
   );
 }
 
+function prepareScheduleSubjectUpsert(env, profileId, userId, subject) {
+  return env.DB.prepare(
+    'INSERT INTO schedule_subjects (id, user_id, profile_id, name, color, valid_from, valid_to) VALUES (?, ?, ?, ?, ?, ?, ?) ' +
+      'ON CONFLICT(id) DO UPDATE SET ' +
+      'name = excluded.name, color = excluded.color, valid_from = excluded.valid_from, valid_to = excluded.valid_to, updated_at = CURRENT_TIMESTAMP ' +
+      'WHERE schedule_subjects.user_id = excluded.user_id AND schedule_subjects.profile_id = excluded.profile_id AND (' +
+      'schedule_subjects.name IS NOT excluded.name OR ' +
+      'COALESCE(schedule_subjects.color, \'\') IS NOT COALESCE(excluded.color, \'\') OR ' +
+      'COALESCE(schedule_subjects.valid_from, \'\') IS NOT COALESCE(excluded.valid_from, \'\') OR ' +
+      'COALESCE(schedule_subjects.valid_to, \'\') IS NOT COALESCE(excluded.valid_to, \'\'))'
+  ).bind(
+    scopedEntityId(profileId, subject.id),
+    userId,
+    profileId,
+    subject.name,
+    typeof subject.color === 'string' && subject.color.trim() ? subject.color.trim() : null,
+    typeof subject.validFrom === 'string' && subject.validFrom.trim() ? subject.validFrom.trim() : null,
+    typeof subject.validTo === 'string' && subject.validTo.trim() ? subject.validTo.trim() : null
+  );
+}
+
+function prepareScheduleSlotUpsert(env, profileId, userId, slot) {
+  const scopedSubjectId = scopedEntityId(profileId, slot.subjectId);
+  return env.DB.prepare(
+    'INSERT INTO schedule_slots (id, user_id, profile_id, subject_id, weekday, start_time, duration_minutes) VALUES (?, ?, ?, ?, ?, ?, ?) ' +
+      'ON CONFLICT(id) DO UPDATE SET ' +
+      'subject_id = excluded.subject_id, weekday = excluded.weekday, start_time = excluded.start_time, duration_minutes = excluded.duration_minutes, updated_at = CURRENT_TIMESTAMP ' +
+      'WHERE schedule_slots.user_id = excluded.user_id AND schedule_slots.profile_id = excluded.profile_id AND (' +
+      'schedule_slots.subject_id IS NOT excluded.subject_id OR schedule_slots.weekday IS NOT excluded.weekday OR ' +
+      'schedule_slots.start_time IS NOT excluded.start_time OR schedule_slots.duration_minutes IS NOT excluded.duration_minutes)'
+  ).bind(
+    scopedEntityId(profileId, slot.id),
+    userId,
+    profileId,
+    scopedSubjectId,
+    slot.weekday,
+    slot.startTime,
+    slot.durationMinutes
+  );
+}
+
 async function ensureProfilesSchema(env) {
   const safeExec = async (statement, ...bindings) => {
     try {
@@ -319,6 +406,23 @@ async function ensureProfilesSchema(env) {
   await safeExec("CREATE INDEX IF NOT EXISTS idx_tasks_user_profile ON tasks(user_id, profile_id)");
   await safeExec("CREATE INDEX IF NOT EXISTS idx_notes_user_profile ON notes(user_id, profile_id)");
   await safeExec("CREATE INDEX IF NOT EXISTS idx_events_user_profile ON events(user_id, profile_id)");
+  await safeExec(
+    'CREATE TABLE IF NOT EXISTS schedule_subjects (' +
+      'id TEXT PRIMARY KEY, user_id TEXT NOT NULL, profile_id TEXT NOT NULL, name TEXT NOT NULL, ' +
+      'color TEXT, valid_from TEXT, valid_to TEXT, ' +
+      'created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP' +
+      ')'
+  );
+  await safeExec('CREATE INDEX IF NOT EXISTS idx_schedule_subjects_user_profile ON schedule_subjects(user_id, profile_id)');
+  await safeExec(
+    'CREATE TABLE IF NOT EXISTS schedule_slots (' +
+      'id TEXT PRIMARY KEY, user_id TEXT NOT NULL, profile_id TEXT NOT NULL, subject_id TEXT NOT NULL, ' +
+      'weekday INTEGER NOT NULL, start_time TEXT NOT NULL, duration_minutes INTEGER NOT NULL, ' +
+      'created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, ' +
+      'FOREIGN KEY (subject_id) REFERENCES schedule_subjects(id) ON DELETE CASCADE' +
+      ')'
+  );
+  await safeExec('CREATE INDEX IF NOT EXISTS idx_schedule_slots_user_profile ON schedule_slots(user_id, profile_id)');
   await safeExec("ALTER TABLE tasks ADD COLUMN hide_in_kanban_done INTEGER DEFAULT 0");
   await safeExec("ALTER TABLE tasks ADD COLUMN dependencies TEXT DEFAULT '[]'");
   await safeExec("ALTER TABLE tasks ADD COLUMN name TEXT");
@@ -504,6 +608,8 @@ export default {
             env.DB.prepare("DELETE FROM tasks WHERE user_id = ? AND profile_id = ?").bind(userId, targetProfileId),
             env.DB.prepare("DELETE FROM notes WHERE user_id = ? AND profile_id = ?").bind(userId, targetProfileId),
             env.DB.prepare("DELETE FROM events WHERE user_id = ? AND profile_id = ?").bind(userId, targetProfileId),
+            env.DB.prepare("DELETE FROM schedule_slots WHERE user_id = ? AND profile_id = ?").bind(userId, targetProfileId),
+            env.DB.prepare("DELETE FROM schedule_subjects WHERE user_id = ? AND profile_id = ?").bind(userId, targetProfileId),
             env.DB.prepare("DELETE FROM profiles WHERE user_id = ? AND id = ?").bind(userId, targetProfileId)
           ]);
 
@@ -528,7 +634,13 @@ export default {
           const { results: events } = await env.DB.prepare(
             "SELECT * FROM events WHERE user_id = ? AND profile_id = ?"
           ).bind(userId, profileId).all();
-          
+          const { results: scheduleSubjects } = await env.DB.prepare(
+            'SELECT * FROM schedule_subjects WHERE user_id = ? AND profile_id = ?'
+          ).bind(userId, profileId).all();
+          const { results: scheduleSlots } = await env.DB.prepare(
+            'SELECT * FROM schedule_slots WHERE user_id = ? AND profile_id = ?'
+          ).bind(userId, profileId).all();
+
           const parsedTasks = tasks.map((t) => ({
             ...t,
             name: typeof t.name === 'string' ? t.name : (typeof t.description === 'string' ? t.description : ''),
@@ -550,7 +662,29 @@ export default {
             ...event,
             id: unscopedEntityId(profileId, event.id)
           }));
-          return json({ tasks: parsedTasks, boardNotes: parsedNotes, events: parsedEvents, profiles, activeProfileId: profileId });
+          const parsedScheduleSubjects = scheduleSubjects.map((row) => ({
+            id: unscopedEntityId(profileId, row.id),
+            name: row.name,
+            color: row.color || '#6366f1',
+            validFrom: row.valid_from || '',
+            validTo: row.valid_to || ''
+          }));
+          const parsedScheduleSlots = scheduleSlots.map((row) => ({
+            id: unscopedEntityId(profileId, row.id),
+            subjectId: unscopedEntityId(profileId, row.subject_id),
+            weekday: row.weekday,
+            startTime: row.start_time,
+            durationMinutes: row.duration_minutes
+          }));
+          return json({
+            tasks: parsedTasks,
+            boardNotes: parsedNotes,
+            events: parsedEvents,
+            scheduleSubjects: parsedScheduleSubjects,
+            scheduleSlots: parsedScheduleSlots,
+            profiles,
+            activeProfileId: profileId
+          });
         }
 
         if (request.method === 'POST' && path === '/sync') {
@@ -565,17 +699,23 @@ export default {
           let taskCount = 0;
           let noteCount = 0;
           let eventCount = 0;
+          let scheduleSubjectCount = 0;
+          let scheduleSlotCount = 0;
 
           if (normalizedBody.mode === 'payload') {
-            const { tasks, boardNotes, events } = normalizedBody.payload;
+            const { tasks, boardNotes, events, scheduleSubjects, scheduleSlots } = normalizedBody.payload;
             taskCount = tasks.length;
             noteCount = boardNotes.length;
             eventCount = events.length;
+            scheduleSubjectCount = scheduleSubjects.length;
+            scheduleSlotCount = scheduleSlots.length;
 
             batch.push(
               env.DB.prepare("DELETE FROM tasks WHERE user_id = ? AND profile_id = ?").bind(userId, syncProfileId),
               env.DB.prepare("DELETE FROM notes WHERE user_id = ? AND profile_id = ?").bind(userId, syncProfileId),
-              env.DB.prepare("DELETE FROM events WHERE user_id = ? AND profile_id = ?").bind(userId, syncProfileId)
+              env.DB.prepare("DELETE FROM events WHERE user_id = ? AND profile_id = ?").bind(userId, syncProfileId),
+              env.DB.prepare('DELETE FROM schedule_slots WHERE user_id = ? AND profile_id = ?').bind(userId, syncProfileId),
+              env.DB.prepare('DELETE FROM schedule_subjects WHERE user_id = ? AND profile_id = ?').bind(userId, syncProfileId)
             );
 
             for (const t of tasks) {
@@ -587,11 +727,19 @@ export default {
             for (const e of events) {
               batch.push(prepareEventUpsert(env, syncProfileId, userId, e));
             }
+            for (const s of scheduleSubjects) {
+              batch.push(prepareScheduleSubjectUpsert(env, syncProfileId, userId, s));
+            }
+            for (const slot of scheduleSlots) {
+              batch.push(prepareScheduleSlotUpsert(env, syncProfileId, userId, slot));
+            }
           } else {
-            const { tasks, notes, events } = normalizedBody.ops;
+            const { tasks, notes, events, scheduleSubjects, scheduleSlots } = normalizedBody.ops;
             taskCount = tasks.upserts.length + tasks.deletes.length;
             noteCount = notes.upserts.length + notes.deletes.length;
             eventCount = events.upserts.length + events.deletes.length;
+            scheduleSubjectCount = scheduleSubjects.upserts.length + scheduleSubjects.deletes.length;
+            scheduleSlotCount = scheduleSlots.upserts.length + scheduleSlots.deletes.length;
 
             for (const taskId of tasks.deletes) {
               batch.push(
@@ -611,6 +759,18 @@ export default {
                   .bind(userId, syncProfileId, scopedEntityId(syncProfileId, eventId))
               );
             }
+            for (const slotId of scheduleSlots.deletes) {
+              batch.push(
+                env.DB.prepare('DELETE FROM schedule_slots WHERE user_id = ? AND profile_id = ? AND id = ?')
+                  .bind(userId, syncProfileId, scopedEntityId(syncProfileId, slotId))
+              );
+            }
+            for (const subjectId of scheduleSubjects.deletes) {
+              batch.push(
+                env.DB.prepare('DELETE FROM schedule_subjects WHERE user_id = ? AND profile_id = ? AND id = ?')
+                  .bind(userId, syncProfileId, scopedEntityId(syncProfileId, subjectId))
+              );
+            }
 
             for (const t of tasks.upserts) {
               batch.push(prepareTaskUpsert(env, syncProfileId, userId, t, taskSchema));
@@ -620,6 +780,12 @@ export default {
             }
             for (const e of events.upserts) {
               batch.push(prepareEventUpsert(env, syncProfileId, userId, e));
+            }
+            for (const s of scheduleSubjects.upserts) {
+              batch.push(prepareScheduleSubjectUpsert(env, syncProfileId, userId, s));
+            }
+            for (const slot of scheduleSlots.upserts) {
+              batch.push(prepareScheduleSlotUpsert(env, syncProfileId, userId, slot));
             }
           }
 
@@ -631,6 +797,8 @@ export default {
             taskCount,
             noteCount,
             eventCount,
+            scheduleSubjectCount,
+            scheduleSlotCount,
             statementCount: batch.length,
             elapsedMs: Date.now() - syncStartedAt
           });
