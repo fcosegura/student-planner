@@ -9,7 +9,7 @@ const SECURITY_HEADERS = {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https://lh3.googleusercontent.com",
     "font-src 'self'",
-    "connect-src 'self'",
+    "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com",
     "frame-src https://accounts.google.com",
     "object-src 'none'",
     "base-uri 'self'",

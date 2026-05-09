@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 
 const WEEKDAY_OPTIONS = [
   { v: 0, label: 'Lun' },
@@ -36,6 +36,21 @@ function uniqueSortedDays(days) {
   return [...new Set(days)].filter((d) => d >= 0 && d <= 6).sort((a, b) => a - b);
 }
 
+function sortSubjectsByName(scheduleSubjects) {
+  return [...scheduleSubjects].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+}
+
+function fieldsForSubjectChoice(choice, scheduleSubjects) {
+  if (choice === NEW_SUBJECT_VALUE) {
+    return { name: '', color: '#6366f1' };
+  }
+  const sub = scheduleSubjects.find((s) => s.id === choice);
+  if (sub) {
+    return { name: sub.name, color: sub.color || '#6366f1' };
+  }
+  return { name: '', color: '#6366f1' };
+}
+
 export default function ScheduleModal({
   mode,
   subject,
@@ -50,7 +65,7 @@ export default function ScheduleModal({
   const isEdit = mode === 'edit';
 
   const sortedSubjects = useMemo(
-    () => [...scheduleSubjects].sort((a, b) => a.name.localeCompare(b.name, 'es')),
+    () => sortSubjectsByName(scheduleSubjects),
     [scheduleSubjects],
   );
 
@@ -58,28 +73,30 @@ export default function ScheduleModal({
     if (isEdit && subject?.id) return subject.id;
     if (sortedSubjects.length > 0) return sortedSubjects[0].id;
     return NEW_SUBJECT_VALUE;
-  }, [isEdit, subject?.id, sortedSubjects]);
+  }, [isEdit, subject, sortedSubjects]);
 
-  const [subjectChoice, setSubjectChoice] = useState(() => defaultSubjectChoice);
-  const [name, setName] = useState(() => (isEdit ? (subject?.name || '') : ''));
-  const [color, setColor] = useState(() => subject?.color || '#6366f1');
+  const [subjectChoice, setSubjectChoice] = useState(defaultSubjectChoice);
+  const [name, setName] = useState(() => {
+    if (isEdit) return subject?.name || '';
+    if (sortedSubjects.length > 0) return sortedSubjects[0].name || '';
+    return '';
+  });
+  const [color, setColor] = useState(() => {
+    if (isEdit) return subject?.color || '#6366f1';
+    if (sortedSubjects.length > 0) return sortedSubjects[0].color || '#6366f1';
+    return '#6366f1';
+  });
   const [selectedDays, setSelectedDays] = useState(() => {
     if (isEdit && slot) return [slot.weekday];
     return [0];
   });
 
-  useEffect(() => {
-    if (subjectChoice === NEW_SUBJECT_VALUE) {
-      setName('');
-      setColor('#6366f1');
-      return;
-    }
-    const sub = scheduleSubjects.find((s) => s.id === subjectChoice);
-    if (sub) {
-      setName(sub.name);
-      setColor(sub.color || '#6366f1');
-    }
-  }, [subjectChoice, scheduleSubjects]);
+  const handleSubjectChoiceChange = (nextChoice) => {
+    setSubjectChoice(nextChoice);
+    const fields = fieldsForSubjectChoice(nextChoice, scheduleSubjects);
+    setName(fields.name);
+    setColor(fields.color);
+  };
 
   const toggleDay = (d) => {
     setSelectedDays((prev) => {
@@ -143,7 +160,7 @@ export default function ScheduleModal({
         <div style={{ display: 'flex', gap: 8, alignItems: 'stretch', flexWrap: 'wrap' }}>
           <select
             value={subjectChoice}
-            onChange={(e) => setSubjectChoice(e.target.value)}
+            onChange={(e) => handleSubjectChoiceChange(e.target.value)}
             style={{ ...inputStyle, marginTop: 0, flex: '1 1 200px', minHeight: 44, appearance: 'none', cursor: 'pointer' }}
             aria-label="Seleccionar asignatura"
           >

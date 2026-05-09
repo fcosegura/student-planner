@@ -2,12 +2,43 @@ import { useEffect, useRef, useState } from 'react';
 
 const GOOGLE_CLIENT_ID = '365692313483-g4tv5i5agl4egs67h980vn6ce977p7df.apps.googleusercontent.com';
 
+function loadGoogleIdentity(callback) {
+  if (window.google?.accounts?.id) {
+    callback();
+    return () => {};
+  }
+  const script = document.querySelector('script[src*="gsi/client"]');
+  const onLoad = () => {
+    if (window.google?.accounts?.id) callback();
+  };
+  if (script) {
+    script.addEventListener('load', onLoad);
+    // Script may have loaded before we subscribed.
+    queueMicrotask(onLoad);
+    return () => script.removeEventListener('load', onLoad);
+  }
+  let cancelled = false;
+  const poll = window.setInterval(() => {
+    if (cancelled) return;
+    if (window.google?.accounts?.id) {
+      window.clearInterval(poll);
+      callback();
+    }
+  }, 50);
+  return () => {
+    cancelled = true;
+    window.clearInterval(poll);
+  };
+}
+
 export default function Login({ onLoginSuccess }) {
   const googleBtnRef = useRef(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (window.google) {
+    let cancelled = false;
+    const cleanupLoad = loadGoogleIdentity(() => {
+      if (cancelled || !googleBtnRef.current) return;
       window.google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
         callback: async (response) => {
@@ -29,7 +60,11 @@ export default function Login({ onLoginSuccess }) {
         text: 'signin_with',
         shape: 'pill',
       });
-    }
+    });
+    return () => {
+      cancelled = true;
+      cleanupLoad();
+    };
   }, [onLoginSuccess]);
 
   return (
