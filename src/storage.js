@@ -185,17 +185,11 @@ export function isValidBoardNote(note) {
 
 const SCHEDULE_TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
-function isValidOptionalIsoDate(value) {
-  if (value === undefined || value === null || value === '') return true;
-  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
-
 export function isValidScheduleSubject(subject) {
   if (!subject || typeof subject !== 'object') return false;
-  const { id, name, color, validFrom, validTo } = subject;
+  const { id, name, color } = subject;
   if (typeof id !== 'string' || typeof name !== 'string') return false;
   if (color !== undefined && color !== null && typeof color !== 'string') return false;
-  if (!isValidOptionalIsoDate(validFrom) || !isValidOptionalIsoDate(validTo)) return false;
   return true;
 }
 
@@ -210,13 +204,14 @@ export function isValidScheduleSlot(slot) {
 }
 
 function normalizeScheduleSubject(subject) {
-  return {
+  const normalized = {
     ...subject,
     name: typeof subject.name === 'string' ? subject.name : '',
     color: typeof subject.color === 'string' && subject.color.trim() ? subject.color.trim() : '#6366f1',
-    validFrom: typeof subject.validFrom === 'string' ? subject.validFrom.trim() : '',
-    validTo: typeof subject.validTo === 'string' ? subject.validTo.trim() : '',
   };
+  delete normalized.validFrom;
+  delete normalized.validTo;
+  return normalized;
 }
 
 function normalizeScheduleSlot(slot) {

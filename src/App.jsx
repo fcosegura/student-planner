@@ -540,8 +540,6 @@ export default function App() {
       subjectChoice,
       name,
       color,
-      validFrom,
-      validTo,
       weekdays,
       startTime,
       durationMinutes,
@@ -552,8 +550,6 @@ export default function App() {
         ...s,
         name,
         color,
-        validFrom,
-        validTo,
       } : s)));
     };
 
@@ -563,8 +559,6 @@ export default function App() {
         id: subjectId,
         name,
         color,
-        validFrom,
-        validTo,
       }]);
       return subjectId;
     };

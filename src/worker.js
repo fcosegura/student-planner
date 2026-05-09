@@ -126,20 +126,13 @@ function isValidScheduleTimeValue(value) {
   return typeof value === 'string' && SCHEDULE_TIME_RE.test(value);
 }
 
-function isValidOptionalIsoDate(value) {
-  if (value === undefined || value === null || value === '') return true;
-  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
-
 function isValidScheduleSubject(subject) {
   return (
     subject &&
     typeof subject === 'object' &&
     typeof subject.id === 'string' &&
     typeof subject.name === 'string' &&
-    (subject.color === undefined || subject.color === null || typeof subject.color === 'string') &&
-    isValidOptionalIsoDate(subject.validFrom) &&
-    isValidOptionalIsoDate(subject.validTo)
+    (subject.color === undefined || subject.color === null || typeof subject.color === 'string')
   );
 }
 
@@ -355,17 +348,15 @@ function prepareScheduleSubjectUpsert(env, profileId, userId, subject) {
       'name = excluded.name, color = excluded.color, valid_from = excluded.valid_from, valid_to = excluded.valid_to, updated_at = CURRENT_TIMESTAMP ' +
       'WHERE schedule_subjects.user_id = excluded.user_id AND schedule_subjects.profile_id = excluded.profile_id AND (' +
       'schedule_subjects.name IS NOT excluded.name OR ' +
-      'COALESCE(schedule_subjects.color, \'\') IS NOT COALESCE(excluded.color, \'\') OR ' +
-      'COALESCE(schedule_subjects.valid_from, \'\') IS NOT COALESCE(excluded.valid_from, \'\') OR ' +
-      'COALESCE(schedule_subjects.valid_to, \'\') IS NOT COALESCE(excluded.valid_to, \'\'))'
+      'COALESCE(schedule_subjects.color, \'\') IS NOT COALESCE(excluded.color, \'\'))'
   ).bind(
     scopedEntityId(profileId, subject.id),
     userId,
     profileId,
     subject.name,
     typeof subject.color === 'string' && subject.color.trim() ? subject.color.trim() : null,
-    typeof subject.validFrom === 'string' && subject.validFrom.trim() ? subject.validFrom.trim() : null,
-    typeof subject.validTo === 'string' && subject.validTo.trim() ? subject.validTo.trim() : null
+    null,
+    null
   );
 }
 
@@ -670,8 +661,6 @@ export default {
             id: unscopedEntityId(profileId, row.id),
             name: row.name,
             color: row.color || '#6366f1',
-            validFrom: row.valid_from || '',
-            validTo: row.valid_to || ''
           }));
           const parsedScheduleSlots = scheduleSlots.map((row) => ({
             id: unscopedEntityId(profileId, row.id),

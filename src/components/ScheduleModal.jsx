@@ -63,8 +63,6 @@ export default function ScheduleModal({
   const [subjectChoice, setSubjectChoice] = useState(() => defaultSubjectChoice);
   const [name, setName] = useState(() => (isEdit ? (subject?.name || '') : ''));
   const [color, setColor] = useState(() => subject?.color || '#6366f1');
-  const [validFrom, setValidFrom] = useState(() => subject?.validFrom || '');
-  const [validTo, setValidTo] = useState(() => subject?.validTo || '');
   const [selectedDays, setSelectedDays] = useState(() => {
     if (isEdit && slot) return [slot.weekday];
     return [0];
@@ -74,16 +72,12 @@ export default function ScheduleModal({
     if (subjectChoice === NEW_SUBJECT_VALUE) {
       setName('');
       setColor('#6366f1');
-      setValidFrom('');
-      setValidTo('');
       return;
     }
     const sub = scheduleSubjects.find((s) => s.id === subjectChoice);
     if (sub) {
       setName(sub.name);
       setColor(sub.color || '#6366f1');
-      setValidFrom(sub.validFrom || '');
-      setValidTo(sub.validTo || '');
     }
   }, [subjectChoice, scheduleSubjects]);
 
@@ -118,8 +112,6 @@ export default function ScheduleModal({
       subjectChoice,
       name: trimmedName,
       color: color.trim() || '#6366f1',
-      validFrom: validFrom.trim(),
-      validTo: validTo.trim(),
       weekdays,
       startTime,
       durationMinutes,
@@ -174,7 +166,7 @@ export default function ScheduleModal({
         <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-text-primary)', opacity: 0.82 }}>
           {subjectChoice === NEW_SUBJECT_VALUE
             ? 'Escribe el nombre de la nueva asignatura abajo.'
-            : 'Puedes renombrar o ajustar color y fechas; los cambios aplican a esa asignatura en todo el horario.'}
+            : 'Puedes renombrar o cambiar el color; los cambios aplican a esa asignatura en todo el horario.'}
         </p>
       </div>
 
@@ -194,16 +186,6 @@ export default function ScheduleModal({
         Color
         <input type="color" value={color} onChange={(e) => setColor(e.target.value)} style={{ ...inputStyle, height: 44, padding: 4 }} />
       </label>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600 }}>
-          <span>Válido desde</span>
-          <input type="date" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} style={{ ...inputStyle, marginTop: 0, height: 44 }} />
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600 }}>
-          <span>Válido hasta</span>
-          <input type="date" value={validTo} onChange={(e) => setValidTo(e.target.value)} style={{ ...inputStyle, marginTop: 0, height: 44 }} />
-        </label>
-      </div>
 
       <fieldset style={{ border: 'none', margin: '0 0 18px', padding: 0 }}>
         <legend style={{ fontSize: 13, marginBottom: 8, fontWeight: 700 }}>Días (uno o varios)</legend>
