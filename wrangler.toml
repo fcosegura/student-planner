@@ -5,7 +5,7 @@
 # 3. wrangler d1 execute student-planner-lite-db --remote --file=schema.sql
 # 4. In Google Cloud Console, add the Workers URL to OAuth "Authorized JavaScript origins" (and redirect URIs if used).
 # 5. wrangler deploy
-name = "student-planner-lite"
+name = "student-planner"
 main = "src/worker.js"
 compatibility_date = "2024-04-03"
 
