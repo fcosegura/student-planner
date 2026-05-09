@@ -1,0 +1,21 @@
+{
+  "name": "Student Planner Lite",
+  "short_name": "Planner Lite",
+  "description": "Calendario y tablero para estudiantes",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#eef3fb",
+  "theme_color": "#2563eb",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["education", "productivity"],
+  "screenshots": []
+}
