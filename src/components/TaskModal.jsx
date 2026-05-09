@@ -2,13 +2,24 @@ import { useState } from 'react';
 import { STATUS, PRIORITY } from '../constants.js';
 import { fmtDate, parseDateTimeFromDescription, parseDescriptionDateResult, cleanDescriptionSegment } from '../utils.jsx';
 
+/** Values must be HH:mm (or '') or controlled <input type="time"> breaks in some browsers. */
+function normalizeTimeForInput(value) {
+  if (value == null || value === '') return '';
+  const s = String(value).trim();
+  const m = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!m) return '';
+  const hh = Math.min(23, Math.max(0, parseInt(m[1], 10)));
+  const mm = Math.min(59, Math.max(0, parseInt(m[2], 10)));
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+}
+
 export default function TaskModal({ task, onSave, onDelete, onClose }) {
   const [form, setForm] = useState({
     ...task,
     name: task.name || '',
     notes: task.notes || '',
     subtasks: task.subtasks || [],
-    time: task.time || '',
+    time: normalizeTimeForInput(task.time),
   });
 
   const handleChange = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
@@ -21,7 +32,12 @@ export default function TaskModal({ task, onSave, onDelete, onClose }) {
     if (!result?.text || cleaned === form.name.trim()) {
       cleaned = cleaned.replace(/(?:\b(?:a|al|a la|a las|el|la|en|para)\b.*)$/i, '').replace(/\s{2,}/g, ' ').trim();
     }
-    setForm((prev) => ({ ...prev, name: cleaned || form.name.trim(), date: preview.date, time: preview.time || prev.time }));
+    setForm((prev) => ({
+      ...prev,
+      name: cleaned || form.name.trim(),
+      date: preview.date,
+      time: normalizeTimeForInput(preview.time || prev.time),
+    }));
   };
 
   const onSubmit = (e) => {
@@ -37,7 +53,7 @@ export default function TaskModal({ task, onSave, onDelete, onClose }) {
       dependencyTaskIds: [],
       hideInKanbanDone: false,
       date: form.date || parsed?.date || '',
-      time: form.time || parsed?.time || '',
+      time: normalizeTimeForInput(form.time || parsed?.time || ''),
     });
   };
 
@@ -87,7 +103,23 @@ export default function TaskModal({ task, onSave, onDelete, onClose }) {
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: 'var(--color-text-secondary)' }}>
           <span style={{ fontWeight: 500 }}>Hora</span>
-          <input type="time" value={form.time || ''} onChange={(e) => handleChange('time', e.target.value)} style={{ width: '100%', height: 44, boxSizing: 'border-box', borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-secondary)', padding: '10px 12px', fontSize: 13, background: 'var(--color-background-primary)', appearance: 'none' }} />
+          <input
+            type="time"
+            step={60}
+            value={form.time || ''}
+            onChange={(e) => handleChange('time', e.target.value)}
+            style={{
+              width: '100%',
+              minHeight: 44,
+              boxSizing: 'border-box',
+              borderRadius: 'var(--border-radius-md)',
+              border: '0.5px solid var(--color-border-secondary)',
+              padding: '10px 12px',
+              fontSize: 13,
+              background: 'var(--color-background-primary)',
+              /* Do not use appearance:none — it breaks native time picker on WebKit/Safari */
+            }}
+          />
         </label>
       </div>
 
